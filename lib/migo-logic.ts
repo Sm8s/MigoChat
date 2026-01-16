@@ -9,8 +9,44 @@ export const generateMigoTag = (username: string) => {
 };
 
 /**
+ * Erstellt oder aktualisiert das Profil eines neuen Nutzers.
+ * Verhindert den "ReferenceError" beim ersten Login.
+ */
+export const setupUserProfile = async (userId: string, username: string, email: string) => {
+  const tag = generateMigoTag(username);
+  const { data, error } = await supabase
+    .from('profiles')
+    .upsert({
+      id: userId,
+      display_name: username,
+      migo_tag: tag,
+      email_internal: email,
+      status: 'online',
+      created_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+/**
+ * Sucht Profile basierend auf einem Teil des Namens (für die Suche).
+ */
+export const searchProfiles = async (query: string) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, display_name, migo_tag, status')
+    .ilike('display_name', `%${query}%`)
+    .limit(5);
+
+  if (error) throw error;
+  return data;
+};
+
+/**
  * Sucht die E-Mail eines Users basierend auf seinem MigoTag oder Username.
- * Hilfreich für den "Username vergessen" Flow.
  */
 export const getEmailByMigoTag = async (migoTag: string) => {
   const { data, error } = await supabase
@@ -24,7 +60,7 @@ export const getEmailByMigoTag = async (migoTag: string) => {
 };
 
 /**
- * Aktualisiert den Online-Status oder die aktuelle Aktivität (Gaming, Lernen etc.).
+ * Aktualisiert den Online-Status oder die aktuelle Aktivität.
  */
 export const updateUserStatus = async (userId: string, status: 'online' | 'offline' | 'away', activity?: string) => {
   const { error } = await supabase
@@ -62,7 +98,7 @@ export const sendFriendRequest = async (currentUserId: string, targetMigoTag: st
 };
 
 /**
- * Akzeptiert eine Anfrage und schiebt sie in die Freundesliste.
+ * Akzeptiert eine Anfrage.
  */
 export const acceptFriendRequest = async (requestId: string) => {
   const { error } = await supabase
@@ -88,14 +124,14 @@ export const declineFriendRequest = async (requestId: string) => {
 };
 
 /**
- * Prüft, ob eine Nachricht als "Anfrage" (von Fremden) oder "Direktnachricht" (von Freunden) gewertet wird.
+ * Prüft den Nachrichtentyp (Direktnachricht vs. Anfrage).
  */
 export const getMessageType = async (senderId: string, receiverId: string) => {
   const { data } = await supabase
     .from('friendships')
     .select('status')
     .or(`and(user_id.eq.${senderId},friend_id.eq.${receiverId}),and(user_id.eq.${receiverId},friend_id.eq.${senderId})`)
-    .single();
+    .maybeSingle();
 
   return data?.status === 'accepted' ? 'direct' : 'request';
 };
