@@ -1,47 +1,79 @@
-import React, { useState } from 'react';
+"use client";
+
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 export default function MigoChat() {
-  const [messages, setMessages] = useState([
-    { id: 1, text: "Hey! Willkommen bei MigoChat", user: "System" },
-  ]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
 
-  const sendMessage = (e: React.FormEvent) => {
+  // 1. Nachrichten beim Laden abrufen
+  useEffect(() => {
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: true });
+      
+      if (data) setMessages(data);
+      if (error) console.error("Fehler beim Laden:", error);
+    };
+
+    fetchMessages();
+
+    // 2. Realtime: Auf neue Nachrichten hören
+    const channel = supabase
+      .channel('public:messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        setMessages((current) => [...current, payload.new]);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // 3. Nachricht senden
+  const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input) return;
-    setMessages([...messages, { id: Date.now(), text: input, user: "Du" }]);
-    setInput('');
+    if (!input.trim()) return;
+
+    const { error } = await supabase
+      .from('messages')
+      .insert([{ content: input, user_id: '00000000-0000-0000-0000-000000000000' }]); // Test-ID
+
+    if (error) {
+      alert("Fehler beim Senden! Hast du die Tabelle in Supabase erstellt?");
+      console.error(error);
+    } else {
+      setInput('');
+    }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-blue-600 p-4 text-white text-center font-bold text-xl shadow-lg">
-        MigoChat 💬
+    <div className="flex flex-col h-screen bg-slate-900 text-white font-sans">
+      <header className="p-4 border-b border-slate-700 bg-slate-800 shadow-md">
+        <h1 className="text-2xl font-bold text-blue-400 text-center">MigoChat</h1>
       </header>
 
-      {/* Nachrichtenbereich */}
-      <main className="flex-1 overflow-y-auto p-4 space-y-4">
+      <main className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.user === 'Du' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xs p-3 rounded-lg ${msg.user === 'Du' ? 'bg-blue-500 text-white' : 'bg-white shadow'}`}>
-              <p className="text-xs opacity-70 mb-1">{msg.user}</p>
-              <p>{msg.text}</p>
-            </div>
+          <div key={msg.id} className="bg-slate-800 p-3 rounded-xl border border-slate-700 w-fit max-w-[80%]">
+            <p className="text-sm text-blue-300 font-bold mb-1">User</p>
+            <p className="text-gray-100">{msg.content}</p>
           </div>
         ))}
       </main>
 
-      {/* Eingabebereich */}
-      <form onSubmit={sendMessage} className="p-4 bg-white border-t flex gap-2">
+      <form onSubmit={sendMessage} className="p-4 bg-slate-800 border-t border-slate-700 flex gap-2">
         <input 
-          type="text" 
+          className="flex-1 bg-slate-900 border border-slate-600 rounded-full px-4 py-2 focus:outline-none focus:border-blue-500"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Schreibe eine Nachricht..." 
-          className="flex-1 border rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Nachricht an MigoChat..."
         />
-        <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-full hover:bg-blue-700 transition">
+        <button className="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-full font-bold transition">
           Senden
         </button>
       </form>
