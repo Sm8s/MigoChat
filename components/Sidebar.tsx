@@ -1,15 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/app/supabaseClient';
 
 interface MyProfile {
   id: string;
   display_name: string;
   migo_tag: string;
+  status?: string;
+  custom_status?: string;
 }
 
 export default function Sidebar({ currentUserId }: { currentUserId: string }) {
+  const router = useRouter();
   const [myProfile, setMyProfile] = useState<MyProfile | null>(null);
 
   useEffect(() => {
@@ -18,13 +22,11 @@ export default function Sidebar({ currentUserId }: { currentUserId: string }) {
     const loadProfile = async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, display_name, migo_tag')
+        .select('id, display_name, migo_tag, status, custom_status')
         .eq('id', currentUserId)
         .single();
 
-      if (!error && data) {
-        setMyProfile(data);
-      }
+      if (!error && data) setMyProfile(data);
     };
 
     loadProfile();
@@ -32,7 +34,6 @@ export default function Sidebar({ currentUserId }: { currentUserId: string }) {
 
   return (
     <aside className="w-64 bg-[#1e1f22] flex flex-col border-r border-[#232428]">
-      {/* Top / Navigation */}
       <div className="p-4 text-white font-black tracking-tight text-lg">
         MIGOCHAT
       </div>
@@ -46,8 +47,12 @@ export default function Sidebar({ currentUserId }: { currentUserId: string }) {
         </button>
       </nav>
 
-      {/* Bottom / eigenes Profil */}
-      <div className="p-4 bg-[#232428] flex items-center gap-3">
+      {/* Bottom / eigenes Profil (klickbar) */}
+      <button
+        type="button"
+        onClick={() => router.push('/profile')}
+        className="p-4 bg-[#232428] flex items-center gap-3 text-left hover:bg-[#2b2d31] transition-colors"
+      >
         <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center text-xs font-bold text-white">
           {myProfile?.display_name?.[0]?.toUpperCase() ?? '?'}
         </div>
@@ -57,10 +62,10 @@ export default function Sidebar({ currentUserId }: { currentUserId: string }) {
             {myProfile?.display_name ?? 'Lädt...'}
           </span>
           <span className="text-gray-400 text-[10px] leading-none truncate">
-            {myProfile?.migo_tag}
+            {myProfile?.migo_tag ?? ''}
           </span>
         </div>
-      </div>
+      </button>
     </aside>
   );
 }
