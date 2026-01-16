@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/app/supabaseClient';
 
@@ -12,19 +12,23 @@ type ProfileRow = {
   bio: string | null;
   is_aura: boolean;
   two_factor_enabled: boolean;
+  banner_color?: string;
 };
 
 export default function ProfilePage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'aura' | 'security'>('overview');
   
   // Form States
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [bannerColor, setBannerColor] = useState('from-indigo-600 via-purple-700 to-blue-600');
 
   useEffect(() => {
     fetchProfile();
@@ -45,8 +49,48 @@ export default function ProfilePage() {
       setProfile(data);
       setUsername(data.username || '');
       setBio(data.bio || '');
+      setAvatarUrl(data.avatar_url);
+      if (data.banner_color) setBannerColor(data.banner_color);
     }
     setLoading(false);
+  };
+
+  // AVATAR UPLOAD LOGIK
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+
+    setSaving(true);
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${profile.id}-${Math.random()}.${fileExt}`;
+
+    // 1. Upload zu Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      alert("Upload fehlgeschlagen: " + uploadError.message);
+      setSaving(false);
+      return;
+    }
+
+    // 2. Öffentliche URL holen
+    const { data: { publicUrl } } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    // 3. In Datenbank speichern
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('id', profile.id);
+
+    if (!updateError) {
+      setAvatarUrl(publicUrl);
+      setProfile({ ...profile, avatar_url: publicUrl });
+    }
+    setSaving(false);
   };
 
   const handleUpdateProfile = async () => {
@@ -54,13 +98,16 @@ export default function ProfilePage() {
     setSaving(true);
     const { error } = await supabase
       .from('profiles')
-      .update({ username, bio })
+      .update({ 
+        username, 
+        bio,
+        banner_color: bannerColor 
+      })
       .eq('id', profile.id);
 
     if (!error) {
-      setProfile({ ...profile, username, bio });
-      // Kleiner Erfolgseffekt
-      alert("Profil erfolgreich synchronisiert.");
+      setProfile({ ...profile, username, bio, banner_color: bannerColor });
+      alert("Profil erfolgreich mit der Cloud synchronisiert.");
     }
     setSaving(false);
   };
@@ -77,15 +124,15 @@ export default function ProfilePage() {
   };
 
   if (loading) return (
-    <div className="h-screen bg-[#0a0a0c] flex items-center justify-center">
-      <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+    <div className="h-screen bg-[#0a0a0c] flex flex-col items-center justify-center">
+      <div className="w-16 h-16 border-[3px] border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+      <p className="text-indigo-500 font-black text-[10px] uppercase tracking-[0.3em]">Accessing Data...</p>
     </div>
   );
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] text-white font-sans selection:bg-indigo-500/30">
       
-      {/* High-End Header */}
       <nav className="h-20 border-b border-white/[0.03] bg-[#111214]/80 backdrop-blur-2xl sticky top-0 z-50 px-10 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <button onClick={() => router.push('/')} className="p-3 hover:bg-white/5 rounded-2xl transition-all group">
@@ -95,15 +142,16 @@ export default function ProfilePage() {
         </div>
         <div className="flex items-center gap-4">
           {profile?.is_aura && (
-            <span className="bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest animate-pulse">AURA ACTIVE</span>
+            <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 px-4 py-1.5 rounded-full">
+              <span className="w-2 h-2 bg-indigo-500 rounded-full animate-ping"></span>
+              <span className="text-[10px] font-black tracking-widest text-indigo-400">AURA ACTIVE</span>
+            </div>
           )}
-          <button onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} className="text-xs font-bold text-gray-500 hover:text-red-500 transition-colors">Abmelden</button>
         </div>
       </nav>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-10 p-10">
         
-        {/* Navigation Sidebar */}
         <aside className="space-y-2">
           {[
             { id: 'overview', label: 'Profil Editieren', icon: '👤' },
@@ -113,64 +161,99 @@ export default function ProfilePage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`w-full flex items-center gap-4 px-6 py-4 rounded-[20px] text-sm font-black transition-all ${
-                activeTab === tab.id ? 'bg-white text-black scale-105 shadow-xl shadow-white/5' : 'text-gray-500 hover:bg-white/5 hover:text-white'
+              className={`w-full flex items-center gap-4 px-6 py-4 rounded-[24px] text-sm font-black transition-all duration-300 ${
+                activeTab === tab.id ? 'bg-white text-black scale-105 shadow-[0_20px_40px_rgba(255,255,255,0.1)]' : 'text-gray-500 hover:bg-white/5 hover:text-white'
               }`}
             >
-              <span>{tab.icon}</span> {tab.label}
+              <span className="text-lg">{tab.icon}</span> {tab.label}
             </button>
           ))}
+          
+          <div className="pt-10">
+             <button 
+              onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
+              className="w-full text-left px-6 py-4 text-red-500/50 hover:text-red-500 text-xs font-black uppercase tracking-widest transition-colors"
+             >
+               Logout Instance
+             </button>
+          </div>
         </aside>
 
-        {/* Main Content Area */}
-        <main className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <main className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           
           {activeTab === 'overview' && (
             <div className="space-y-8">
-              {/* Profile Card */}
-              <section className="bg-[#1e1f22] rounded-[40px] border border-white/[0.03] overflow-hidden shadow-2xl">
-                <div className="h-40 bg-gradient-to-br from-indigo-600 via-purple-700 to-blue-600 relative">
-                  <div className="absolute -bottom-14 left-10 p-2 bg-[#1e1f22] rounded-full">
-                    <div className={`w-28 h-28 rounded-full flex items-center justify-center text-4xl font-black shadow-2xl border-4 border-[#1e1f22] ${profile?.is_aura ? 'bg-gradient-to-tr from-indigo-500 to-purple-500 animate-pulse' : 'bg-gray-700'}`}>
-                      {username[0]?.toUpperCase() || 'U'}
+              <section className="bg-[#1e1f22] rounded-[48px] border border-white/[0.03] overflow-hidden shadow-2xl relative">
+                
+                {/* Dynamischer Banner */}
+                <div className={`h-48 bg-gradient-to-br ${bannerColor} relative transition-all duration-500`}>
+                   <div className="absolute top-6 right-8 flex gap-2">
+                      {['from-indigo-600 to-blue-600', 'from-rose-600 to-orange-500', 'from-emerald-600 to-teal-500'].map((col) => (
+                        <button 
+                          key={col} 
+                          onClick={() => setBannerColor(col)}
+                          className={`w-6 h-6 rounded-full border-2 border-white/20 ${col} hover:scale-125 transition-all`}
+                        />
+                      ))}
+                   </div>
+                </div>
+
+                <div className="absolute top-28 left-10 group">
+                  <div className="p-1.5 bg-[#1e1f22] rounded-full relative">
+                    <div className={`w-32 h-32 rounded-full overflow-hidden flex items-center justify-center text-5xl font-black shadow-2xl border-4 border-[#1e1f22] bg-[#2b2d31] ${profile?.is_aura ? 'ring-4 ring-indigo-500/30' : ''}`}>
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        username[0]?.toUpperCase() || 'U'
+                      )}
                     </div>
+                    {/* Upload Overlay */}
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="absolute inset-0 bg-black/60 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs font-black uppercase tracking-widest"
+                    >
+                      Change
+                    </button>
+                    <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} className="hidden" accept="image/*" />
                   </div>
                 </div>
 
-                <div className="pt-20 pb-10 px-10">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6">
+                <div className="pt-24 pb-12 px-12">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div className="space-y-8">
                       <div>
-                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-2 block">Anzeigename</label>
+                        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-3 block">Identity</label>
                         <input 
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
-                          className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-4 text-sm font-bold focus:border-indigo-500 outline-none transition-all"
+                          placeholder="Username"
+                          className="w-full bg-black/40 border border-white/5 rounded-3xl px-8 py-5 text-sm font-bold focus:border-indigo-500 outline-none transition-all shadow-inner"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-2 block">Bio / Status</label>
+                        <label className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-500 mb-3 block">Aura Bio</label>
                         <textarea 
                           value={bio}
                           onChange={(e) => setBio(e.target.value)}
-                          rows={3}
-                          className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-4 text-sm font-bold focus:border-indigo-500 outline-none transition-all resize-none"
-                          placeholder="Erzähl etwas über dich..."
+                          rows={4}
+                          className="w-full bg-black/40 border border-white/5 rounded-3xl px-8 py-5 text-sm font-bold focus:border-indigo-500 outline-none transition-all resize-none shadow-inner"
+                          placeholder="Define your presence..."
                         />
                       </div>
                     </div>
 
-                    <div className="flex flex-col justify-end gap-4">
-                      <div className="bg-white/[0.02] p-6 rounded-3xl border border-white/5">
-                        <p className="text-[10px] font-black text-gray-500 uppercase mb-1">Migo-Tag</p>
-                        <p className="text-xl font-mono font-black text-indigo-400">#{profile?.migo_tag}</p>
+                    <div className="flex flex-col justify-end gap-6">
+                      <div className="bg-white/[0.02] p-8 rounded-[32px] border border-white/5 backdrop-blur-md">
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Global Migo-Tag</p>
+                        <p className="text-3xl font-mono font-black text-indigo-400">#{profile?.migo_tag}</p>
+                        <p className="text-[10px] text-gray-600 mt-4 leading-relaxed font-medium">Dein Tag ist permanent und dient zur Identifizierung im Migo-Netzwerk.</p>
                       </div>
                       <button 
                         onClick={handleUpdateProfile}
                         disabled={saving}
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+                        className={`w-full py-5 rounded-[24px] font-black uppercase tracking-[0.2em] text-xs shadow-2xl transition-all active:scale-95 ${saving ? 'bg-gray-700 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20'}`}
                       >
-                        {saving ? 'Synchronisiere...' : 'Änderungen speichern'}
+                        {saving ? 'Syncing...' : 'Save Configuration'}
                       </button>
                     </div>
                   </div>
@@ -181,54 +264,59 @@ export default function ProfilePage() {
 
           {activeTab === 'security' && (
             <div className="space-y-6">
-              <h2 className="text-3xl font-black italic tracking-tighter">Security & Shield</h2>
-              <div className="bg-[#1e1f22] rounded-[40px] border border-white/[0.03] p-10 space-y-6">
+              <h2 className="text-4xl font-black italic tracking-tighter mb-10">Security & Shield</h2>
+              <div className="grid gap-6">
                 
-                <div className="flex items-center justify-between p-6 bg-black/20 rounded-[30px] border border-white/5">
-                  <div>
-                    <p className="font-black text-white italic">Zwei-Faktor-Authentifizierung (2FA)</p>
-                    <p className="text-xs text-gray-500 mt-1 font-medium">Sichert deinen Account vor unbefugtem Zugriff.</p>
+                <div className="group flex items-center justify-between p-8 bg-[#1e1f22] rounded-[32px] border border-white/[0.03] hover:border-indigo-500/30 transition-all">
+                  <div className="flex gap-6 items-center">
+                    <div className="w-14 h-14 bg-indigo-500/10 rounded-2xl flex items-center justify-center text-2xl">🔐</div>
+                    <div>
+                      <p className="font-black text-white italic text-lg">Zwei-Faktor-Authentifizierung</p>
+                      <p className="text-xs text-gray-500 mt-1 font-semibold">Zusätzliche Sicherheitsebene für Logins.</p>
+                    </div>
                   </div>
                   <button 
                     onClick={toggleTwoFactor}
-                    className={`w-14 h-8 rounded-full relative transition-all ${profile?.two_factor_enabled ? 'bg-green-500' : 'bg-gray-700'}`}
+                    className={`w-16 h-9 rounded-full relative transition-all duration-500 ${profile?.two_factor_enabled ? 'bg-indigo-500' : 'bg-white/10'}`}
                   >
-                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${profile?.two_factor_enabled ? 'left-7' : 'left-1'}`} />
+                    <div className={`absolute top-1.5 w-6 h-6 bg-white rounded-full transition-all shadow-xl ${profile?.two_factor_enabled ? 'left-8' : 'left-1.5'}`} />
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between p-6 bg-black/20 rounded-[30px] border border-white/5">
-                  <div>
-                    <p className="font-black text-white italic">Passwort ändern</p>
-                    <p className="text-xs text-gray-500 mt-1 font-medium">Letzte Änderung: Vor 12 Tagen</p>
-                  </div>
-                  <button className="bg-white/5 hover:bg-white/10 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Anfordern</button>
+                <div className="p-8 bg-[#1e1f22] rounded-[32px] border border-white/[0.03]">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-6 text-center">Danger Zone</h4>
+                  <button className="w-full py-4 border border-red-500/20 hover:bg-red-500/10 text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all">
+                    Delete Account & Data
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
           {activeTab === 'aura' && (
-            <div className="space-y-6">
-               <h2 className="text-3xl font-black italic tracking-tighter">Migo Aura Status</h2>
-               <div className="bg-gradient-to-br from-[#1e1f22] to-[#111214] rounded-[40px] border border-white/5 p-12 text-center">
-                  <div className="w-24 h-24 bg-indigo-500/10 rounded-full flex items-center justify-center text-4xl mx-auto mb-6 border border-indigo-500/20">
-                    {profile?.is_aura ? '✨' : '💎'}
+            <div className="max-w-3xl mx-auto py-10">
+               <div className="relative group p-[2px] rounded-[50px] bg-gradient-to-br from-indigo-500 via-purple-600 to-transparent">
+                  <div className="bg-[#0a0a0c] rounded-[48px] p-16 text-center">
+                    <div className={`w-32 h-32 rounded-full flex items-center justify-center text-6xl mx-auto mb-10 border-2 border-indigo-500/30 shadow-[0_0_50px_rgba(99,102,241,0.2)] ${profile?.is_aura ? 'animate-pulse' : ''}`}>
+                      {profile?.is_aura ? '✨' : '💎'}
+                    </div>
+                    <h3 className="text-4xl font-black mb-4 italic tracking-tighter">
+                      {profile?.is_aura ? 'Aura Elite Status' : 'No Aura Detected'}
+                    </h3>
+                    <p className="text-gray-500 font-bold text-sm leading-relaxed mb-12">
+                      {profile?.is_aura 
+                        ? 'Dein Status ist im Netzwerk verifiziert. Du genießt maximale Privatsphäre und exklusive UI-Anpassungen.' 
+                        : 'Schalte die Aura frei, um exklusive Badges, 4K Streaming und den verschlüsselten Vault zu erhalten.'}
+                    </p>
+                    {!profile?.is_aura && (
+                      <button 
+                        onClick={() => router.push('/?view=aura')}
+                        className="bg-white text-black px-12 py-5 rounded-[24px] font-black uppercase tracking-widest text-xs hover:scale-105 transition-all shadow-2xl"
+                      >
+                        Get Aura Now
+                      </button>
+                    )}
                   </div>
-                  <h3 className="text-2xl font-black mb-2">{profile?.is_aura ? 'Du hast die Aura!' : 'Keine Aura erkannt'}</h3>
-                  <p className="text-gray-500 text-sm max-w-sm mx-auto mb-10">
-                    {profile?.is_aura 
-                      ? 'Dein Profil strahlt. Du hast Zugriff auf alle Elite-Features und The Vault.' 
-                      : 'Schalte die Aura frei, um exklusive Badges, höhere Qualität und verschlüsselten Speicher zu erhalten.'}
-                  </p>
-                  {!profile?.is_aura && (
-                    <button 
-                      onClick={() => router.push('/?view=aura')}
-                      className="bg-indigo-600 hover:bg-indigo-500 px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
-                    >
-                      Aura erwerben
-                    </button>
-                  )}
                </div>
             </div>
           )}
