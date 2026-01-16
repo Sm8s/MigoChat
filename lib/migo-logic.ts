@@ -1,14 +1,22 @@
 import { supabase } from '@/app/supabaseClient';
 
-<<<<<<< HEAD
+/**
+ * Generiert MigoTag wie "emmo#LK55" (4 Zeichen Hex).
+ * (Du nutzt aktuell genau dieses Format in der DB)
+ */
 export const generateMigoTag = (username: string) => {
   const hex = Math.floor(Math.random() * 65536)
     .toString(16)
     .toUpperCase()
     .padStart(4, '0');
+
   return `${username.toLowerCase()}#${hex}`;
 };
 
+/**
+ * Optional: Profil anlegen/aktualisieren (nur falls du KEINEN Trigger nutzt).
+ * Wenn du Trigger nutzt: kannst du diese Funktion irgendwann entfernen.
+ */
 export const setupUserProfile = async (userId: string, username: string, email: string) => {
   const tag = generateMigoTag(username);
 
@@ -16,10 +24,10 @@ export const setupUserProfile = async (userId: string, username: string, email: 
     .from('profiles')
     .upsert({
       id: userId,
-      username: username,         // ✅ bei dir heißt es username
-      display_name: username,     // ✅ optional, wenn Spalte existiert
-      migo_tag: tag,              // ✅
-      email_internal: email,      // ✅
+      username,
+      display_name: username,
+      migo_tag: tag,
+      email_internal: email,
       status: 'online',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -31,17 +39,26 @@ export const setupUserProfile = async (userId: string, username: string, email: 
   return data;
 };
 
+/**
+ * Suche nach Usern (optional)
+ */
 export const searchProfiles = async (query: string) => {
+  const q = query.trim();
+  if (!q) return [];
+
   const { data, error } = await supabase
     .from('profiles')
     .select('id, username, display_name, migo_tag, status')
-    .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
+    .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
     .limit(5);
 
   if (error) throw error;
-  return data;
+  return data ?? [];
 };
 
+/**
+ * Status updaten
+ */
 export const updateUserStatus = async (
   userId: string,
   status: 'online' | 'offline' | 'away',
@@ -61,13 +78,17 @@ export const updateUserStatus = async (
   return true;
 };
 
-// Helper: "Emmo#LK55" -> "LK55"
+// "Emmo#LK55" -> "LK55"  |  "LK55" -> "LK55"
 const extractTag = (input: string) => {
   const raw = input.trim();
-  const tag = raw.includes('#') ? raw.split('#').pop()!.trim() : raw.trim();
+  const tag = raw.includes('#') ? raw.split('#').pop()!.trim() : raw;
   return tag.toUpperCase();
 };
 
+/**
+ * Freundschaftsanfrage senden (RLS-safe, nutzt RPC get_profile_by_migo_tag)
+ * Erwartet: input wie "Emmo#LK55" oder "LK55"
+ */
 export const sendFriendRequest = async (
   currentUserId: string,
   inputMigoTag: string
@@ -77,7 +98,7 @@ export const sendFriendRequest = async (
 
     if (!tag) return { ok: false, message: 'Bitte MigoTag eingeben.' };
 
-    // 🔥 Zielprofil via RPC holen (RLS-safe)
+    // Zielprofil via RPC holen (umgeht RLS sauber, ohne email_internal zu leaken)
     const { data: rows, error: rpcErr } = await supabase.rpc('get_profile_by_migo_tag', { tag });
 
     if (rpcErr) return { ok: false, message: rpcErr.message };
@@ -86,7 +107,7 @@ export const sendFriendRequest = async (
     if (!targetUser?.id) return { ok: false, message: 'MigoTag existiert nicht.' };
     if (targetUser.id === currentUserId) return { ok: false, message: 'Selbst-Adden nicht möglich.' };
 
-    // Check: Beziehung existiert schon? (beide Richtungen)
+    // Check: existiert schon eine Beziehung? (beide Richtungen)
     const { data: existing, error: existErr } = await supabase
       .from('friendships')
       .select('id, status')
@@ -102,7 +123,7 @@ export const sendFriendRequest = async (
       if (existing.status === 'accepted') return { ok: false, message: 'Ihr seid bereits befreundet.' };
     }
 
-    // ✅ Insert passt zu deiner friendships Tabelle
+    // Anfrage erstellen (passt zu deiner friendships Tabelle!)
     const { error: insErr } = await supabase.from('friendships').insert([
       {
         sender_id: currentUserId,
@@ -121,99 +142,23 @@ export const sendFriendRequest = async (
 };
 
 export const acceptFriendRequest = async (requestId: string) => {
-=======
-/**
- * MigoTag: 2 Buchstaben + 2 Zahlen (z.B. AB12)
- */
-export function generateMigoTag(): string {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const nums = '0123456789';
-
-  const a = letters[Math.floor(Math.random() * letters.length)];
-  const b = letters[Math.floor(Math.random() * letters.length)];
-  const n1 = nums[Math.floor(Math.random() * nums.length)];
-  const n2 = nums[Math.floor(Math.random() * nums.length)];
-
-  return `${a}${b}${n1}${n2}`;
-}
-
-/**
- * Sendet eine Freundschaftsanfrage über friendships:
- * sender_id, receiver_id, initiator_id, status
- */
-export async function sendFriendRequest(currentUserId: string, targetMigoTag: string) {
-  const tag = targetMigoTag.trim().toUpperCase();
-
-  // Zielprofil finden
-  const { data: targetUser, error: findError } = await supabase
-    .from('profiles')
-    .select('id')
-    .ilike('migo_tag', tag)
-    .maybeSingle();
-
-  if (findError) throw new Error(findError.message);
-  if (!targetUser?.id) throw new Error('MigoTag existiert nicht.');
-  if (targetUser.id === currentUserId) throw new Error('Selbst-Adden nicht möglich.');
-
-  // Check: gibt’s schon eine Beziehung (in beide Richtungen)
-  const { data: existing, error: existErr } = await supabase
-    .from('friendships')
-    .select('id, status')
-    .or(
-      `and(sender_id.eq.${currentUserId},receiver_id.eq.${targetUser.id}),and(sender_id.eq.${targetUser.id},receiver_id.eq.${currentUserId})`
-    )
-    .maybeSingle();
-
-  if (existErr) throw new Error(existErr.message);
-  if (existing) {
-    if (existing.status === 'pending') throw new Error('Es gibt schon eine ausstehende Anfrage.');
-    if (existing.status === 'accepted') throw new Error('Ihr seid bereits befreundet.');
-  }
-
-  // Anfrage erstellen
-  const { error } = await supabase.from('friendships').insert([
-    {
-      sender_id: currentUserId,
-      receiver_id: targetUser.id,
-      initiator_id: currentUserId,
-      status: 'pending',
-    },
-  ]);
-
-  if (error) throw new Error(error.message);
-  return true;
-}
-
-export async function acceptFriendRequest(requestId: string) {
->>>>>>> 0a5225071d35d94e803babc0d69e420798a44c16
   const { error } = await supabase
     .from('friendships')
     .update({ status: 'accepted' })
     .eq('id', requestId);
 
-  if (error) throw new Error(error.message);
+  if (error) throw error;
   return true;
-}
+};
 
-<<<<<<< HEAD
 export const declineFriendRequest = async (requestId: string) => {
   const { error } = await supabase.from('friendships').delete().eq('id', requestId);
   if (error) throw error;
-=======
-export async function declineFriendRequest(requestId: string) {
-  const { error } = await supabase
-    .from('friendships')
-    .delete()
-    .eq('id', requestId);
-
-  if (error) throw new Error(error.message);
->>>>>>> 0a5225071d35d94e803babc0d69e420798a44c16
   return true;
-}
+};
 
-<<<<<<< HEAD
 export const getMessageType = async (senderId: string, receiverId: string) => {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('friendships')
     .select('status')
     .or(
@@ -221,27 +166,6 @@ export const getMessageType = async (senderId: string, receiverId: string) => {
     )
     .maybeSingle();
 
+  if (error) return 'request';
   return data?.status === 'accepted' ? 'direct' : 'request';
 };
-=======
-/**
- * Optional: Online Status (nur wenn Spalten existieren: status, last_seen, current_activity)
- */
-export async function updateUserStatus(
-  userId: string,
-  status: 'online' | 'offline' | 'away',
-  activity?: string
-) {
-  const { error } = await supabase
-    .from('profiles')
-    .update({
-      status,
-      last_seen: new Date().toISOString(),
-      current_activity: activity ?? null,
-    })
-    .eq('id', userId);
-
-  if (error) throw new Error(error.message);
-  return true;
-}
->>>>>>> 0a5225071d35d94e803babc0d69e420798a44c16
