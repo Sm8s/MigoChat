@@ -1,18 +1,21 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Ignoriert Linting-Fehler während des Build-Prozesses auf Vercel
   eslint: {
-    // Das erlaubt den Build, auch wenn ESLint Fehler findet
     ignoreDuringBuilds: true,
   },
+  // Ignoriert TypeScript-Fehler beim Build für schnelleres Deployment
   typescript: {
-    // Ignoriert TypeScript-Fehler beim Build (falls noch welche da sind)
     ignoreBuildErrors: true,
   },
-
-  // Erzwingt den Build trotz Sicherheitswarnungen der Version
+  // Optimierungen für Bilder und externe Quellen (optional erweiterbar)
+  images: {
+    domains: ['supabase.co'], // Falls du Profilbilder von Supabase lädst
+  },
+  // Entfernt unnötige experimentelle Flags, die Warnungen erzeugen könnten
   experimental: {
-    // Falls vorhanden, hier andere Optionen lassen
+    // Hier können stabile experimentelle Features stehen
   }
 };
 
