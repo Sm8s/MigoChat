@@ -12,17 +12,16 @@ interface UserSession {
   user: { id: string; email?: string; };
 }
 
-// "Migo Aura" als neuer Premium-Standard
-type MainView = 'friends' | 'discover' | 'aura' | 'activity' | 'vault';
+// Definition der funktionalen Ansichten
+type MainView = 'hub' | 'explore' | 'aura' | 'vault';
 
 export default function ChatPage() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'online' | 'pending'>('online');
-  const [currentView, setCurrentView] = useState<MainView>('friends');
+  const [currentView, setCurrentView] = useState<MainView>('hub');
   const [showAddModal, setShowAddModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   
   const router = useRouter();
 
@@ -66,102 +65,127 @@ export default function ChatPage() {
         onCloseMobile={() => setMobileMenuOpen(false)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 bg-[#1e1f22] md:my-2 md:mr-2 md:rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/[0.03] overflow-hidden relative">
+      <div className="flex-1 flex flex-col min-w-0 bg-[#1e1f22] md:my-2 md:mr-2 md:rounded-[40px] shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/[0.03] overflow-hidden relative">
         
         {/* Navigation Header */}
-        <header className="h-16 flex items-center justify-between px-8 bg-[#1e1f22]/80 backdrop-blur-2xl border-b border-white/[0.03] z-20 shrink-0">
-          <div className="flex items-center gap-8 overflow-x-auto no-scrollbar">
+        <header className="h-20 flex items-center justify-between px-10 bg-[#1e1f22]/80 backdrop-blur-2xl border-b border-white/[0.03] z-20 shrink-0">
+          <div className="flex items-center gap-8">
             <button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-gray-400 hover:text-white">☰</button>
             
-            <nav className="flex items-center gap-2">
+            <nav className="flex items-center gap-3">
               {[
-                { id: 'friends', label: 'Hub', icon: '💎' },
-                { id: 'discover', label: 'Explore', icon: '🪐' },
+                { id: 'hub', label: 'Hub', icon: '💎' },
+                { id: 'explore', label: 'Explore', icon: '🪐' },
                 { id: 'aura', label: 'Migo Aura', icon: '✨' },
                 { id: 'vault', label: 'The Vault', icon: '🔐' }
               ].map((btn) => (
                 <button
                   key={btn.id}
                   onClick={() => setCurrentView(btn.id as MainView)}
-                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${
-                    currentView === btn.id ? 'bg-white text-black shadow-xl shadow-white/10' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
+                  className={`flex items-center gap-3 px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 ${
+                    currentView === btn.id ? 'bg-white text-black shadow-2xl shadow-white/10 scale-105' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
                   }`}
                 >
-                  <span className="text-sm">{btn.icon}</span> {btn.label}
+                  <span className="text-base">{btn.icon}</span> {btn.label}
                 </button>
               ))}
             </nav>
           </div>
 
-          <div className="hidden lg:flex items-center gap-5">
-            <button 
-              onClick={() => setShowAddModal(true)}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-[0.2em] py-2.5 px-5 rounded-xl shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
-            >
-              Add Connection
-            </button>
-          </div>
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="hidden lg:block bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-[0.2em] py-3 px-6 rounded-2xl shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
+          >
+            Add Connection
+          </button>
         </header>
 
         <main className="flex-1 flex overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-8 relative scrollbar-hide">
+          <div className="flex-1 overflow-y-auto p-10 scrollbar-hide">
             
-            {/* View: FRIENDS */}
-            {currentView === 'friends' && (
-              <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="flex justify-between items-center mb-8">
-                  <h2 className="text-3xl font-black tracking-tighter">Your Network</h2>
-                  <div className="flex bg-black/20 p-1.5 rounded-2xl border border-white/5">
+            {/* VIEW: HUB (Netzwerk & Freunde) */}
+            {currentView === 'hub' && (
+              <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <div className="flex justify-between items-center mb-10">
+                  <h2 className="text-4xl font-black tracking-tighter italic">Your Network</h2>
+                  <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5">
                     {['online', 'all', 'pending'].map((t) => (
                       <button 
                         key={t}
                         onClick={() => setActiveTab(t as any)}
-                        className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === t ? 'bg-[#313338] text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                        className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all ${activeTab === t ? 'bg-[#313338] text-white shadow-xl' : 'text-gray-500 hover:text-gray-300'}`}
                       >
                         {t}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div className="bg-[#2b2d31]/30 rounded-[40px] border border-white/[0.03] backdrop-blur-md overflow-hidden min-h-[500px] shadow-inner">
+                <div className="bg-[#2b2d31]/30 rounded-[48px] border border-white/[0.04] backdrop-blur-3xl overflow-hidden min-h-[500px] shadow-2xl">
                   <FriendsList currentUserId={session!.user.id} filter={activeTab} />
                 </div>
               </div>
             )}
 
-            {/* View: MIGO AURA (Das "krasse" Verkaufs-Feature) */}
-            {currentView === 'aura' && (
-              <div className="max-w-5xl mx-auto py-10 animate-in zoom-in-95 duration-700">
-                <div className="text-center mb-16">
-                  <span className="bg-indigo-500/10 text-indigo-400 text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-[0.3em] border border-indigo-500/20">Elevate your Status</span>
-                  <h1 className="text-6xl font-black tracking-tighter mt-6 mb-4 bg-gradient-to-b from-white to-gray-500 bg-clip-text text-transparent italic">MIGO AURA</h1>
-                  <p className="text-gray-500 max-w-lg mx-auto text-sm leading-relaxed font-medium">Lass die Standard-User hinter dir. Aura ist kein Abo, es ist ein Upgrade deiner digitalen Existenz.</p>
+            {/* VIEW: EXPLORE (Communities) */}
+            {currentView === 'explore' && (
+              <div className="max-w-6xl mx-auto animate-in slide-in-from-right-4 duration-700">
+                <div className="mb-12">
+                  <h2 className="text-4xl font-black tracking-tighter italic mb-2">Explore Worlds</h2>
+                  <p className="text-gray-500 font-medium">Tritt exklusiven Migo-Zirkeln bei.</p>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {[
-                    { title: 'Ghost Mode', desc: 'Werde unsichtbar. Keine Read-Receipts, kein "Tippt gerade...", volle Kontrolle.', icon: '👻' },
-                    { title: 'Aura Badges', desc: 'Exklusive, animierte Badges in deinem Profil, die auf deine Stimmung reagieren.', icon: '🛡️' },
-                    { title: 'Ultra Streaming', desc: 'Übertrage in 4K bei 120 FPS ohne Verzögerung für deine gesamte Crew.', icon: '🎬' }
-                  ].map((f, i) => (
-                    <div key={i} className="bg-white/[0.02] border border-white/[0.05] p-8 rounded-[32px] hover:bg-white/[0.05] transition-all group">
-                      <div className="text-3xl mb-4 group-hover:scale-110 transition-transform duration-500">{f.icon}</div>
-                      <h3 className="text-lg font-bold text-white mb-2">{f.title}</h3>
-                      <p className="text-xs text-gray-500 leading-relaxed font-medium">{f.desc}</p>
+                    { name: 'Elite Developers', tag: 'DEV', members: '1.2k', icon: '⚡' },
+                    { name: 'Aura Collectors', tag: 'GOLD', members: '840', icon: '🏆' },
+                    { name: 'Midnight Lounge', tag: 'CHAT', members: '2.5k', icon: '🌙' }
+                  ].map((room, i) => (
+                    <div key={i} className="group bg-white/[0.02] border border-white/[0.05] p-8 rounded-[40px] hover:bg-white/[0.05] transition-all cursor-pointer relative overflow-hidden">
+                      <div className="absolute top-6 right-6 text-[9px] font-black bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded-full">{room.tag}</div>
+                      <div className="text-4xl mb-6 group-hover:scale-110 transition-transform duration-500">{room.icon}</div>
+                      <h3 className="text-xl font-bold mb-1">{room.name}</h3>
+                      <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">{room.members} Online</p>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
 
-                <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 p-[1px] rounded-[40px] shadow-[0_20px_50px_rgba(79,70,229,0.3)]">
-                  <div className="bg-[#0a0a0c] rounded-[40px] p-12 flex flex-col md:flex-row items-center justify-between gap-8">
-                    <div>
-                      <h2 className="text-3xl font-black italic">ULTIMATE AURA</h2>
-                      <p className="text-gray-400 text-sm mt-2 font-medium">Vollzugriff auf alle Features + Early Access.</p>
+            {/* VIEW: MIGO AURA (Premium Verkauf) */}
+            {currentView === 'aura' && (
+              <div className="max-w-5xl mx-auto py-10 animate-in zoom-in-95 duration-700">
+                <div className="text-center mb-16 space-y-4">
+                  <span className="bg-indigo-500/10 text-indigo-400 text-[10px] font-black px-5 py-2 rounded-full uppercase tracking-[0.4em] border border-indigo-500/20">Status-Revolution</span>
+                  <h1 className="text-7xl font-black tracking-tighter bg-gradient-to-b from-white to-gray-500 bg-clip-text text-transparent italic">MIGO AURA</h1>
+                  <p className="text-gray-500 max-w-lg mx-auto text-sm leading-relaxed font-semibold">Dies ist kein Abo. Es ist das Ende der Standard-Existenz.</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-indigo-600 via-purple-700 to-indigo-900 p-[1px] rounded-[50px] shadow-[0_30px_80px_rgba(79,70,229,0.4)]">
+                  <div className="bg-[#0a0a0c] rounded-[50px] p-16 flex flex-col md:flex-row items-center gap-16">
+                    <div className="flex-1 space-y-8">
+                      <h2 className="text-4xl font-black italic tracking-tight">ULTIMATE AURA</h2>
+                      <div className="space-y-5">
+                        {[
+                          { t: 'Ghost Mode', d: 'Völlige Unsichtbarkeit für alle.', i: '👻' },
+                          { t: '4K Stream', d: 'Keine Pixel, nur pure Qualität.', i: '🎬' },
+                          { t: 'The Vault', d: 'Eigener, verschlüsselter Cloud-Speicher.', i: '🔐' }
+                        ].map((feat, i) => (
+                          <div key={i} className="flex items-start gap-4">
+                            <span className="text-2xl">{feat.i}</span>
+                            <div>
+                              <p className="font-bold text-white">{feat.t}</p>
+                              <p className="text-xs text-gray-500">{feat.d}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-3">
-                      <div className="text-4xl font-black">€8.99 <span className="text-sm text-gray-500 font-normal">/mo</span></div>
-                      <button className="bg-white text-black px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/10">
-                        Get Aura Now
+                    <div className="flex flex-col items-center gap-6 bg-white/[0.03] p-10 rounded-[40px] border border-white/5">
+                      <div className="text-center">
+                        <div className="text-5xl font-black mb-1 italic">€8.99</div>
+                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Per Month</p>
+                      </div>
+                      <button className="bg-white text-black px-12 py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-white/10">
+                        Claim Your Aura
                       </button>
                     </div>
                   </div>
@@ -169,19 +193,22 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* View: THE VAULT (Exklusives Bonus Feature) */}
+            {/* VIEW: THE VAULT (Premium Feature Showcase) */}
             {currentView === 'vault' && (
               <div className="h-full flex flex-col items-center justify-center text-center p-12 animate-in fade-in duration-1000">
-                <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center text-4xl mb-6 border border-white/10 shadow-2xl">🔐</div>
-                <h2 className="text-2xl font-black tracking-tight mb-2 uppercase">The Vault</h2>
-                <p className="text-gray-500 max-w-sm text-xs font-medium leading-relaxed">
-                  Dies ist dein privater, verschlüsselter Speicher. Nur für Aura-Mitglieder verfügbar. Sichere deine wichtigsten Dateien mit Ende-zu-Ende Verschlüsselung.
+                <div className="w-32 h-32 bg-white/[0.03] rounded-full flex items-center justify-center text-5xl mb-10 border border-white/10 shadow-[0_0_60px_rgba(255,255,255,0.05)] relative">
+                  🔐
+                  <div className="absolute inset-0 rounded-full border border-indigo-500/30 animate-ping opacity-20"></div>
+                </div>
+                <h2 className="text-3xl font-black tracking-tighter mb-4 uppercase italic">The Vault</h2>
+                <p className="text-gray-500 max-w-sm text-xs font-bold leading-loose">
+                  Dein privater Sektor. Ende-zu-Ende verschlüsselter Speicherplatz für Dateien, die nur dich etwas angehen.
                 </p>
                 <button 
                   onClick={() => setCurrentView('aura')}
-                  className="mt-8 text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] hover:text-white transition-colors"
+                  className="mt-12 text-indigo-400 text-[10px] font-black uppercase tracking-[0.4em] hover:text-white transition-all bg-indigo-500/5 px-8 py-4 rounded-full border border-indigo-500/20"
                 >
-                  Upgrade to unlock
+                  Upgrade to Aura Elite to Unlock
                 </button>
               </div>
             )}
@@ -189,44 +216,43 @@ export default function ChatPage() {
           </div>
 
           {/* Activity Sidebar */}
-          <aside className="w-80 border-l border-white/[0.03] hidden xl:flex flex-col p-8 bg-black/10 backdrop-blur-md">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-600 mb-8">Pulse Feed</h3>
+          <aside className="w-96 border-l border-white/[0.03] hidden xl:flex flex-col p-10 bg-black/10 backdrop-blur-3xl">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-600 mb-10">Pulse Feed</h3>
             
-            <div className="space-y-6">
+            <div className="space-y-8">
               {[
-                { user: 'System', msg: 'Aura Servers Optimized', time: 'Now', color: 'bg-green-500' },
-                { user: 'Dev-Team', msg: 'New "Ghost Mode" deployed', time: '14m', color: 'bg-indigo-500' }
+                { user: 'System', msg: 'Aura Node 7 Optimized', time: 'Now', color: 'bg-green-500' },
+                { user: 'Security', msg: 'Vault Encryption verified', time: '12m', color: 'bg-indigo-500' },
+                { user: 'Network', msg: 'New High-Speed Tunnel active', time: '1h', color: 'bg-purple-500' }
               ].map((log, i) => (
-                <div key={i} className="relative pl-6 border-l border-white/5 pb-2">
-                  <div className={`absolute -left-[4px] top-0 w-2 h-2 rounded-full ${log.color} shadow-[0_0_10px_inherit]`}></div>
+                <div key={i} className="relative pl-8 border-l border-white/5">
+                  <div className={`absolute -left-[4px] top-0 w-2 h-2 rounded-full ${log.color} shadow-[0_0_15px_inherit]`}></div>
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] font-black uppercase tracking-tighter text-white/80">{log.user}</span>
+                    <span className="text-[11px] font-black uppercase tracking-tight text-white/80">{log.user}</span>
                     <span className="text-[9px] text-gray-600 font-bold">{log.time}</span>
                   </div>
-                  <p className="text-[11px] text-gray-500 font-medium">{log.msg}</p>
+                  <p className="text-[12px] text-gray-500 font-semibold italic">{log.msg}</p>
                 </div>
               ))}
             </div>
 
-            <div className="mt-auto p-6 bg-white/[0.02] border border-white/[0.05] rounded-[24px]">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-amber-500">🔥</span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-white">Daily Streak</span>
-              </div>
-              <p className="text-[10px] text-gray-500 font-medium">Du bist seit 12 Tagen aktiv. Aura-Mitglieder erhalten Bonus-Aura-Points!</p>
+            <div className="mt-auto p-8 bg-white/[0.02] border border-white/[0.05] rounded-[32px] text-center">
+              <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.2em] mb-2">Current Status</p>
+              <p className="text-sm font-bold text-white italic">"Your Aura defines you."</p>
             </div>
           </aside>
         </main>
       </div>
 
+      {/* Modal Integration */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-[#0a0a0c]/90 flex items-center justify-center z-[100] backdrop-blur-xl p-4">
-          <div className="w-full max-w-md bg-[#1e1f22] rounded-[40px] shadow-[0_0_100px_rgba(0,0,0,0.8)] border border-white/10 overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="flex justify-between items-center p-6 bg-white/[0.02]">
-              <h2 className="text-white font-black text-xs uppercase tracking-[0.2em]">New Connection</h2>
+        <div className="fixed inset-0 bg-[#0a0a0c]/95 flex items-center justify-center z-[100] backdrop-blur-3xl p-6">
+          <div className="w-full max-w-md bg-[#1e1f22] rounded-[50px] shadow-[0_0_120px_rgba(0,0,0,0.8)] border border-white/10 overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-center p-8 bg-white/[0.02]">
+              <h2 className="text-white font-black text-xs uppercase tracking-[0.3em]">New Connection</h2>
               <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-white p-2">✕</button>
             </div>
-            <div className="p-10">
+            <div className="p-12">
               <AddFriendModal currentUserId={session!.user.id} onSuccess={() => setShowAddModal(false)} />
             </div>
           </div>
