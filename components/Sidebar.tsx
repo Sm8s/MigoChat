@@ -34,11 +34,19 @@ export default function Sidebar({ currentUserId }: { currentUserId: string }) {
   const fullName = `${myProfile?.username ?? 'Lädt...'}#${myProfile?.migo_tag ?? '----'}`;
   const avatarLetter = (myProfile?.username ?? '?')?.[0]?.toUpperCase();
 
+  const handleLogout = async () => {
+  await supabase.auth.signOut();
+  router.push('/login');
+};
+
+
   return (
     <aside className="w-64 bg-[#1e1f22] flex flex-col border-r border-[#232428]">
       <div className="p-4 text-white font-black tracking-tight text-lg">
         MIGOCHAT
       </div>
+
+      
 
       <nav className="flex-1 px-2 space-y-1">
         <button
@@ -74,6 +82,17 @@ export default function Sidebar({ currentUserId }: { currentUserId: string }) {
           </span>
         </div>
       </button>
+
+      {/* Logout */}
+<button
+  onClick={handleLogout}
+  className="mx-4 mb-4 mt-2 px-3 py-2 rounded-md text-sm font-semibold
+             bg-[#3a1f1f] text-red-300 hover:bg-[#4a2323] hover:text-red-200
+             transition-colors"
+>
+  Logout
+</button>
+
     </aside>
   );
 }
