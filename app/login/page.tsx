@@ -9,104 +9,83 @@ export default function AuthPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
-  // Passwort-Stärke berechnen
-  const getPasswordStrength = (pw: string) => {
-    if (pw.length === 0) return { label: '', color: 'bg-gray-700', width: '0%' };
-    if (pw.length < 6) return { label: 'Schwach', color: 'bg-red-500', width: '33%' };
-    if (pw.length < 10) return { label: 'Gut', color: 'bg-yellow-500', width: '66%' };
-    return { label: 'Stark', color: 'bg-green-500', width: '100%' };
+  // Passwort-Stärke-Check
+  const checkStrength = (pw: string) => {
+    if (pw.length === 0) return { w: '0%', c: 'bg-gray-600', t: '' };
+    if (pw.length < 6) return { w: '30%', c: 'bg-red-500', t: 'Schwach' };
+    if (pw.length < 10) return { w: '60%', c: 'bg-yellow-500', t: 'Mittel' };
+    return { w: '100%', c: 'bg-green-500', t: 'Stark' };
   };
 
-  const strength = getPasswordStrength(password);
+  const strength = checkStrength(password);
 
   const handleAuth = async () => {
+    setErrorMsg('');
     if (isRegister) {
-      if (password !== confirmPassword) {
-        alert("Passwörter stimmen nicht überein!");
-        return;
-      }
+      if (!username) return setErrorMsg("Username fehlt!");
+      if (password !== confirmPassword) return setErrorMsg("Passwörter ungleich!");
       
-      // 1. Registrierung bei Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (authData.user) {
-        // 2. MigoTag generieren und Profil erstellen
-        const migoTag = generateMigoTag(username); 
-        await supabase.from('profiles').insert([
-          { id: authData.user.id, display_name: username, migo_tag: migoTag }
-        ]);
-        alert(`Registriert! Dein Tag: ${migoTag}`);
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) return setErrorMsg(error.message);
+      
+      if (data.user) {
+        const tag = generateMigoTag(username); //
+        await supabase.from('profiles').insert([{ id: data.user.id, display_name: username, migo_tag: tag }]);
+        alert("Account erstellt! Dein Tag: " + tag);
       }
     } else {
-      // Login Logik (Username/Email Handling)
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) alert(error.message);
+      if (error) setErrorMsg("Login fehlgeschlagen. Daten prüfen.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#1e1f22] flex items-center justify-center text-white p-4">
-      <div className="bg-[#313338] p-8 rounded-lg shadow-xl w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-center">
-          {isRegister ? 'Konto erstellen' : 'Willkommen zurück!'}
-        </h1>
+    <div className="min-h-screen bg-[#1e1f22] flex items-center justify-center font-sans">
+      <div className="bg-[#313338] p-8 rounded-lg shadow-2xl w-full max-w-md border border-gray-800">
+        <h1 className="text-white text-3xl font-black mb-8 text-center tracking-tighter italic">MIGOCHAT</h1>
         
         <div className="space-y-4">
           {isRegister && (
-            <input 
-              type="text" placeholder="Username" 
-              className="w-full p-2 bg-[#1e1f22] rounded border border-gray-700"
-              onChange={(e) => setUsername(e.target.value)}
-            />
+            <input type="text" placeholder="Wähle deinen Username" onChange={e => setUsername(e.target.value)}
+              className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
           )}
           
-          <input 
-            type="email" placeholder="Email" 
-            className="w-full p-2 bg-[#1e1f22] rounded border border-gray-700"
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <input type="email" placeholder="E-Mail Adresse" onChange={e => setEmail(e.target.value)}
+            className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
           
-          <input 
-            type="password" placeholder="Passwort" 
-            className="w-full p-2 bg-[#1e1f22] rounded border border-gray-700"
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <div className="relative">
+            <input type="password" placeholder="Passwort" onChange={e => setPassword(e.target.value)}
+              className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
+            {isRegister && (
+              <div className="mt-2 h-1 w-full bg-gray-700 rounded overflow-hidden">
+                <div className={`h-full transition-all duration-500 ${strength.c}`} style={{ width: strength.w }}></div>
+              </div>
+            )}
+          </div>
 
           {isRegister && (
-            <>
-              <input 
-                type="password" placeholder="Passwort bestätigen" 
-                className="w-full p-2 bg-[#1e1f22] rounded border border-gray-700"
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-              {/* Passwort-Stärke-Anzeige */}
-              <div className="w-full h-1 bg-gray-700 rounded mt-1">
-                <div className={`h-full ${strength.color} transition-all duration-300`} style={{ width: strength.width }}></div>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-1">Stärke: {strength.label}</p>
-            </>
+            <input type="password" placeholder="Passwort wiederholen" onChange={e => setConfirmPassword(e.target.value)}
+              className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
           )}
 
-          <button onClick={handleAuth} className="w-full bg-indigo-600 hover:bg-indigo-700 p-2 rounded font-bold">
-            {isRegister ? 'Registrieren' : 'Anmelden'}
+          {errorMsg && <p className="text-red-400 text-xs text-center">{errorMsg}</p>}
+
+          <button onClick={handleAuth} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold p-3 rounded transition-colors shadow-lg">
+            {isRegister ? 'JETZT REGISTRIEREN' : 'EINLOGGEN'}
           </button>
         </div>
 
-        <div className="mt-4 flex flex-col items-center gap-2 text-sm">
-          <button onClick={() => setIsRegister(!isRegister)} className="text-indigo-400 hover:underline">
-            {isRegister ? 'Bereits ein Konto? Login' : 'Noch kein Konto? Registrieren'}
+        <div className="mt-6 flex flex-col gap-3 text-sm text-center">
+          <button onClick={() => setIsRegister(!isRegister)} className="text-indigo-400 hover:text-indigo-300">
+            {isRegister ? 'Doch lieber einloggen?' : 'Noch kein Migo? Account erstellen'}
           </button>
           
-          {!isRegister && (
-            <div className="flex gap-4">
-              <button className="text-gray-400 hover:text-white text-xs">Username vergessen?</button>
-              <button className="text-gray-400 hover:text-white text-xs">Passwort vergessen?</button>
-            </div>
-          )}
+          <div className="flex justify-around text-[11px] text-gray-500">
+            <button className="hover:text-gray-300">Username vergessen?</button>
+            <button className="hover:text-gray-300">Passwort vergessen?</button>
+          </div>
         </div>
       </div>
     </div>
