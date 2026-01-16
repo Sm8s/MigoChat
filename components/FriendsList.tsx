@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/app/supabaseClient';
-import { acceptFriendRequest, declineFriendRequest } from '@/lib/migo-logic';
+import { respondFriendRequest, fetchFriendData } from '@/lib/migo-logic';
 
 type Filter = 'all' | 'online' | 'pending';
 
@@ -41,46 +41,12 @@ export default function FriendsList({
       setLoading(false);
       return;
     }
-
     try {
       setLoading(true);
-
-      const [friendRes, reqRes] = await Promise.all([
-        supabase
-          .from('friendships')
-          .select(
-            `
-            id,
-            sender:profiles!friendships_sender_id_fkey(id, username, migo_tag, status, custom_status),
-            receiver:profiles!friendships_receiver_id_fkey(id, username, migo_tag, status, custom_status)
-          `
-          )
-          .eq('status', 'accepted')
-          .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`),
-
-        supabase
-          .from('friendships')
-          .select(
-            `
-            id,
-            sender:profiles!friendships_sender_id_fkey(id, username, migo_tag)
-          `
-          )
-          .eq('receiver_id', currentUserId)
-          .eq('status', 'pending'),
-      ]);
-
-      if (friendRes.error) throw friendRes.error;
-      if (reqRes.error) throw reqRes.error;
-
-      const acceptedRows = (friendRes.data ?? []) as FriendshipAcceptedRow[];
-      const list = acceptedRows
-        .map((f) => (f.sender?.id === currentUserId ? f.receiver : f.sender))
-        .filter(Boolean) as ProfileLite[];
-
-      setFriends(list);
-
-      const pending = (reqRes.data ?? []).filter((r: any) => r.sender) as PendingRow[];
+      const { accepted, inbound } = await fetchFriendData(currentUserId);
+      setFriends(accepted);
+      // map inbound to expected structure for pendingRequests
+      const pending = inbound.map((prof) => ({ id: prof.id, sender: { id: prof.id, username: prof.username, migo_tag: prof.migo_tag } }));
       setPendingRequests(pending);
     } catch (err) {
       console.error('Fehler beim Laden:', err);
@@ -91,12 +57,14 @@ export default function FriendsList({
 
   useEffect(() => {
     fetchData();
-
+    // Für Echtzeit-Updates können wir optional auf postgres_changes hören. Falls
+    // supabase-js v2 verwendet wird, könnten wir hier einen Channel anmelden.
     const channel = supabase
       .channel(`friends-sync-${currentUserId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, fetchData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, () => {
+        fetchData();
+      })
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
@@ -138,14 +106,14 @@ export default function FriendsList({
 
                   <div className="flex gap-2 shrink-0">
                     <button
-                      onClick={() => acceptFriendRequest(req.id).then(fetchData)}
+                      onClick={() => respondFriendRequest(req.sender!.id, 'accepted').then(fetchData)}
                       className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded"
                       title="Annehmen"
                     >
                       ✓
                     </button>
                     <button
-                      onClick={() => declineFriendRequest(req.id).then(fetchData)}
+                      onClick={() => respondFriendRequest(req.sender!.id, 'rejected').then(fetchData)}
                       className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded"
                       title="Ablehnen"
                     >

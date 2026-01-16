@@ -8,9 +8,9 @@ export default function AuthPage() {
   const router = useRouter();
 
   const [isRegister, setIsRegister] = useState(false);
-  const [identifier, setIdentifier] = useState(''); // username ODER email beim Login
-  const [email, setEmail] = useState(''); // nur beim Register
-  const [username, setUsername] = useState(''); // nur beim Register
+  // Single email state for both login and registration
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState(''); // only used when registering
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -24,36 +24,18 @@ export default function AuthPage() {
     return { w: '100%', c: 'bg-green-500', t: 'Stark' };
   }, [password]);
 
-  const resolveEmailFromUsername = async (name: string) => {
-    const clean = name.trim();
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('email_internal')
-      .ilike('username', clean)
-      .maybeSingle();
-
-    if (error) throw new Error(error.message);
-    const mail = data?.email_internal?.trim();
-    if (!mail) throw new Error('Username nicht gefunden.');
-    return mail;
-  };
+  // Login erfolgt nur über die E‑Mail. Eine Auflösung von Benutzernamen zu E‑Mail findet nicht mehr statt.
 
   const handleForgotPassword = async () => {
     setErrorMsg('');
     setInfoMsg('');
-
-    const input = identifier.trim();
-    if (!input) {
-      setErrorMsg('Gib Username oder E-Mail ein.');
+    if (!email.trim()) {
+      setErrorMsg('Bitte gib deine E-Mail ein.');
       return;
     }
-
     try {
       setBusy(true);
-      const mail = input.includes('@') ? input : await resolveEmailFromUsername(input);
-
-      const { error } = await supabase.auth.resetPasswordForEmail(mail);
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase());
       if (error) setErrorMsg(error.message);
       else setInfoMsg('Check deine E-Mails zum Zurücksetzen.');
     } catch (e: any) {
@@ -92,16 +74,11 @@ export default function AuthPage() {
         return;
       }
 
-      // LOGIN: identifier kann username oder email sein
-      const input = identifier.trim();
-      if (!input) throw new Error('Gib Username oder E-Mail ein.');
-
-      const loginEmail = input.includes('@')
-        ? input.trim().toLowerCase()
-        : await resolveEmailFromUsername(input);
-
+      // LOGIN: nur über E-Mail möglich
+      const mail = email.trim().toLowerCase();
+      if (!mail.includes('@')) throw new Error('Bitte eine gültige E-Mail eingeben.');
       const { error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
+        email: mail,
         password,
       });
 
@@ -143,10 +120,10 @@ export default function AuthPage() {
             </>
           ) : (
             <input
-              type="text"
-              placeholder="Username oder E-Mail"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
+              type="email"
+              placeholder="E-Mail Adresse"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all"
             />
           )}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { sendFriendRequest } from '@/lib/migo-logic';
+import { sendFriendRequestByTag } from '@/lib/migo-logic';
 
 type Props = {
   currentUserId: string;
@@ -27,18 +27,15 @@ export default function AddFriendModal({ currentUserId, onSuccess }: Props) {
       return;
     }
 
-    const tag = extractTag(input);
-
-    if (!tag) {
-      setStatus('Bitte MigoTag eingeben. Beispiel: Emmo#LK55');
+    const userInput = input.trim();
+    if (!userInput) {
+      setStatus('Bitte MigoTag oder Username eingeben. Beispiel: Emmo#ABCD');
       return;
     }
-
     try {
       setBusy(true);
-      const result = await sendFriendRequest(currentUserId, tag);
+      const result = await sendFriendRequestByTag(currentUserId, userInput);
       setStatus(result.message);
-
       if (result.ok) {
         setInput('');
         onSuccess?.();

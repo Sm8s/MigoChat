@@ -1,111 +1,274 @@
+// /messages page: direct messages chat
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '@/app/supabaseClient';
+import {
+  fetchFriendData,
+  getOrCreateDirectConversation,
+} from '@/lib/migo-logic';
+
+interface UserSession {
+  user: { id: string };
+}
+
+interface ConversationListItem {
+  id: string;
+  otherUser: { id: string; username: string | null; migo_tag: string | null };
+}
+
+interface ChatMessage {
+  id: string;
+  author_id: string;
+  content: string;
+  created_at: string;
+  author: { id: string; username: string | null; migo_tag: string | null } | null;
+}
 
 export default function MessagesPage() {
   const router = useRouter();
-  
-  // Beispiel-Daten für die Eleganz
-  const contacts = [
-    { id: 1, name: 'Maximilian', status: 'Online', lastMsg: 'Das Design sieht Hammer aus.', time: '14:20' },
-    { id: 2, name: 'Sarah Schmidt', status: 'Abwesend', lastMsg: 'Schickst du mir die Files?', time: 'Gestern' },
-  ];
+  const params = useSearchParams();
+  const [session, setSession] = useState<UserSession | null>(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
+  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [loadingConvs, setLoadingConvs] = useState(false);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+
+  useEffect(() => {
+    const getSession = async () => {
+      const { data: { session: sess }, error } = await supabase.auth.getSession();
+      if (error || !sess) {
+        router.push('/login');
+        return;
+      }
+      setSession(sess as any);
+      setLoadingSession(false);
+    };
+    getSession();
+  }, [router]);
+
+  // Load conversations for user
+  const loadConversations = useCallback(async () => {
+    if (!session) return;
+    setLoadingConvs(true);
+    try {
+      // Step 1: fetch conversation_ids for current user
+      const { data: memberRows, error: memberErr } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', session.user.id);
+      if (memberErr) throw memberErr;
+      const convIds = (memberRows ?? []).map((row: any) => row.conversation_id);
+      const list: ConversationListItem[] = [];
+      // For each conversation, find other member
+      for (const convId of convIds) {
+        // fetch conversation to check type
+        const { data: conv, error: convErr } = await supabase
+          .from('conversations')
+          .select('id, type')
+          .eq('id', convId)
+          .maybeSingle();
+        if (convErr || !conv) continue;
+        if (conv.type !== 'direct') continue;
+        // get other member's profile
+        const { data: members, error: memErr } = await supabase
+          .from('conversation_members')
+          .select('user_id, profiles(id, username, migo_tag)')
+          .eq('conversation_id', convId);
+        if (memErr) continue;
+        const others = (members ?? []).filter((m: any) => m.user_id !== session.user.id);
+        if (others.length > 0) {
+          const other = others[0].profiles;
+          list.push({ id: convId, otherUser: other });
+        }
+      }
+      setConversations(list);
+      // If there is a query param, select conversation automatically
+      const paramConv = params.get('c');
+      if (paramConv) {
+        setSelectedConvId(paramConv);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingConvs(false);
+    }
+  }, [session, params]);
+
+  useEffect(() => {
+    loadConversations();
+  }, [loadConversations]);
+
+  // Load messages for selected conversation
+  const loadMessages = useCallback(async (convId: string) => {
+    if (!session) return;
+    setLoadingMsgs(true);
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .select(
+          'id, author_id, content, created_at, author:profiles(id, username, migo_tag)'
+        )
+        .eq('conversation_id', convId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      setMessages(data as any);
+      // update last_read_at
+      await supabase
+        .from('conversation_members')
+        .update({ last_read_at: new Date().toISOString() })
+        .eq('conversation_id', convId)
+        .eq('user_id', session.user.id);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingMsgs(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (selectedConvId) {
+      loadMessages(selectedConvId);
+    }
+  }, [selectedConvId, loadMessages]);
+
+  // handle sending message
+  const handleSend = async () => {
+    if (!session || !selectedConvId) return;
+    const text = newMessage.trim();
+    if (!text) return;
+    try {
+      await supabase.from('messages').insert({
+        conversation_id: selectedConvId,
+        author_id: session.user.id,
+        content: text,
+      });
+      setNewMessage('');
+      // reload messages
+      loadMessages(selectedConvId);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSelectConversation = (conv: ConversationListItem) => {
+    setSelectedConvId(conv.id);
+    // update query param
+    router.push(`/messages?c=${conv.id}`);
+  };
+
+  const handleStartConversation = async (profileId: string) => {
+    if (!session) return;
+    try {
+      const convId = await getOrCreateDirectConversation(profileId);
+      await loadConversations();
+      setSelectedConvId(convId);
+      router.push(`/messages?c=${convId}`);
+    } catch (err: any) {
+      alert(err?.message ?? 'Konnte Chat nicht starten.');
+    }
+  };
+
+  if (loadingSession) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-[#1e1f22] text-white">Lädt...</div>
+    );
+  }
 
   return (
-    <div className="flex h-screen bg-[#111214] text-gray-100 font-sans selection:bg-indigo-500/30">
-      
-      {/* Sidebar: Kontaktliste */}
-      <aside className="w-80 border-r border-white/5 bg-[#2b2d31] flex flex-col">
-        <header className="h-16 flex items-center px-6 border-b border-white/5 justify-between">
-          <h1 className="text-xl font-bold tracking-tight text-white">Messages</h1>
-          <button 
-            onClick={() => router.push('/')}
-            className="p-2 hover:bg-white/5 rounded-full transition-colors text-gray-400 hover:text-white"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-        </header>
-        
-        <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {contacts.map((contact) => (
-            <div key={contact.id} className="group flex items-center gap-4 p-3 rounded-xl hover:bg-white/5 cursor-pointer transition-all duration-200 border border-transparent hover:border-white/10">
-              <div className="relative w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                {contact.name[0]}
-                <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-[#2b2d31] rounded-full"></div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-baseline">
-                  <span className="font-semibold truncate">{contact.name}</span>
-                  <span className="text-[10px] uppercase tracking-widest text-gray-500">{contact.time}</span>
+    <div className="h-screen flex bg-[#0a0a0c] text-gray-200">
+      {/* conversation list */}
+      <aside className="w-72 border-r border-white/[0.1] bg-[#1e1f22] flex flex-col">
+        <div className="p-4 border-b border-white/[0.1]">
+          <h2 className="text-xl font-bold">Nachrichten</h2>
+        </div>
+        {loadingConvs ? (
+          <p className="p-4 text-gray-500">Lädt...</p>
+        ) : conversations.length === 0 ? (
+          <p className="p-4 text-gray-500">Keine Konversationen</p>
+        ) : (
+          <ul className="flex-1 overflow-y-auto">
+            {conversations.map((conv) => (
+              <li
+                key={conv.id}
+                onClick={() => handleSelectConversation(conv)}
+                className={`px-4 py-3 cursor-pointer hover:bg-[#2b2d31] ${selectedConvId === conv.id ? 'bg-[#2b2d31]' : ''}`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-[#4e5058] flex items-center justify-center text-white font-bold">
+                    {conv.otherUser.username?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-bold text-white truncate">
+                      {conv.otherUser.username ?? 'Unbekannt'}
+                      {conv.otherUser.migo_tag ? <span className="text-gray-400">#{conv.otherUser.migo_tag}</span> : null}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-400 truncate group-hover:text-gray-300">{contact.lastMsg}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </aside>
-
-      {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col bg-[#313338]">
-        {/* Chat Header */}
-        <header className="h-16 flex items-center px-8 border-b border-white/5 bg-[#313338]/80 backdrop-blur-md sticky top-0 z-10 justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-gray-400 text-2xl font-light">#</span>
-            <span className="font-bold text-white tracking-wide">maximilian_vibe</span>
+      {/* chat view */}
+      <div className="flex-1 flex flex-col">
+        {!selectedConvId ? (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            <p>Wähle eine Unterhaltung oder starte einen Chat aus der Freundesliste.</p>
           </div>
-          <div className="flex gap-4 text-gray-400">
-            <button className="hover:text-white transition-colors">🔍</button>
-            <button className="hover:text-white transition-colors">🔔</button>
-          </div>
-        </header>
-
-        {/* Messages Flow */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-8">
-          {/* Beispiel Nachricht Empfangen */}
-          <div className="flex gap-4 max-w-2xl">
-            <div className="w-10 h-10 rounded-full bg-indigo-600 shrink-0 shadow-inner"></div>
-            <div className="space-y-1">
-              <div className="flex items-baseline gap-2">
-                <span className="font-bold text-indigo-400">Maximilian</span>
-                <span className="text-[10px] text-gray-500">14:20</span>
-              </div>
-              <div className="bg-[#2b2d31] p-4 rounded-2xl rounded-tl-none border border-white/5 text-gray-200 leading-relaxed shadow-sm">
-                Hey! Hast du die neuen UI-Komponenten schon gesehen? Wir spielen jetzt in einer ganz anderen Liga. 🚀
-              </div>
+        ) : (
+          <>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {loadingMsgs ? (
+                <p className="text-gray-500">Lädt Nachrichten...</p>
+              ) : messages.length === 0 ? (
+                <p className="text-gray-500">Keine Nachrichten</p>
+              ) : (
+                messages.map((m) => {
+                  const mine = m.author_id === session!.user.id;
+                  return (
+                    <div
+                      key={m.id}
+                      className={`max-w-[70%] p-3 rounded-2xl ${mine ? 'bg-indigo-600 text-white self-end' : 'bg-[#2b2d31] text-gray-200 self-start'}`}
+                    >
+                      {!mine && (
+                        <span className="text-xs font-bold text-indigo-400 block mb-1">
+                          {m.author?.username ?? 'Unbekannt'}
+                          {m.author?.migo_tag ? `#${m.author.migo_tag}` : ''}
+                        </span>
+                      )}
+                      <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                      <span className="text-[10px] text-gray-400">{new Date(m.created_at).toLocaleTimeString()}</span>
+                    </div>
+                  );
+                })
+              )}
             </div>
-          </div>
-
-          {/* Beispiel Nachricht Gesendet */}
-          <div className="flex gap-4 max-w-2xl ml-auto flex-row-reverse">
-            <div className="w-10 h-10 rounded-full bg-gray-700 shrink-0 shadow-inner"></div>
-            <div className="space-y-1 items-end flex flex-col">
-              <div className="flex items-baseline gap-2">
-                <span className="text-[10px] text-gray-500">14:22</span>
-                <span className="font-bold text-white">Du</span>
-              </div>
-              <div className="bg-indigo-600 p-4 rounded-2xl rounded-tr-none text-white leading-relaxed shadow-xl shadow-indigo-500/10">
-                Sieht extrem clean aus. Besonders die Transparenz-Effekte!
-              </div>
+            {/* message input */}
+            <div className="p-4 border-t border-white/[0.1] flex items-center gap-2">
+              <input
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSend();
+                }}
+                placeholder="Nachricht schreiben..."
+                className="flex-1 bg-[#1e1f22] border border-white/[0.1] p-3 rounded-2xl text-white outline-none"
+              />
+              <button
+                onClick={handleSend}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-2xl text-sm font-bold"
+              >
+                Senden
+              </button>
             </div>
-          </div>
-        </div>
-
-        {/* Input Area */}
-        <footer className="p-6">
-          <div className="max-w-4xl mx-auto relative">
-            <input 
-              type="text" 
-              placeholder="Nachricht an #maximilian_vibe"
-              className="w-full bg-[#383a40] border-none rounded-2xl py-4 px-6 focus:ring-2 focus:ring-indigo-500/50 text-gray-200 placeholder-gray-500 transition-all shadow-2xl"
-            />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex gap-3 text-gray-400">
-              <button className="hover:text-indigo-400 transition-colors">🎁</button>
-              <button className="hover:text-indigo-400 transition-colors">😊</button>
-            </div>
-          </div>
-        </footer>
-      </main>
+          </>
+        )}
+      </div>
     </div>
   );
 }

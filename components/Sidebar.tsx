@@ -86,18 +86,40 @@ export default function Sidebar({
         </div>
 
         <nav className="flex-1 px-2 space-y-1">
+          {/* Hub / Freunde */}
           <button
             onClick={() => go('/')}
             className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
           >
-            Freunde
+            Hub
           </button>
-
+          {/* Feed */}
+          <button
+            onClick={() => go('/feed')}
+            className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
+          >
+            Feed
+          </button>
+          {/* Explore / Search */}
+          <button
+            onClick={() => go('/search')}
+            className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
+          >
+            Explore
+          </button>
+          {/* Messages */}
           <button
             onClick={() => go('/messages')}
             className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
           >
             Nachrichten
+          </button>
+          {/* Notifications */}
+          <button
+            onClick={() => go('/notifications')}
+            className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
+          >
+            Benachrichtigungen
           </button>
         </nav>
 
