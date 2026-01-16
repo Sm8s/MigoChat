@@ -11,16 +11,16 @@
     "@supabase/supabase-js": "2.39.7",
     "next": "15.1.0",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "lucide-react": "^0.450.0"
   },
-  "bundleDependencies": [
-    "@supabase/supabase-js"
-  ],
   "devDependencies": {
     "@types/node": "22.10.2",
     "@types/react": "19.0.1",
     "@types/react-dom": "19.0.1",
-    "tailwindcss": "3.4.1",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.4.1",
+    "autoprefixer": "^10.4.16",
     "typescript": "5.7.2"
   }
 }
