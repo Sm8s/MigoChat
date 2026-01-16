@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../Lib/supabaseClient';
 
 export default function MigoChat() {
   const [messages, setMessages] = useState<any[]>([]);
