@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Ignoriert Linting-Fehler während des Builds auf Vercel
+  // Ignoriert Linting-Fehler beim Build auf Vercel
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Korrekte Konfiguration für externe Bilder (ersetzt das veraltete 'domains')
+  // Korrekte Konfiguration für Bilder (behebt die Warnung im Screenshot)
   images: {
     remotePatterns: [
       {
