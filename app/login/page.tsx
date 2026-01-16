@@ -2,16 +2,18 @@
 import { useState } from 'react';
 import { supabase } from '@/app/supabaseClient';
 import { generateMigoTag } from '@/lib/migo-logic';
+import { useRouter } from 'next/navigation';
 
 export default function AuthPage() {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(''); // Eindeutiger Migo-Name
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [infoMsg, setInfoMsg] = useState('');
+  const router = useRouter();
 
-  // Passwort-Stärke-Check
   const checkStrength = (pw: string) => {
     if (pw.length === 0) return { w: '0%', c: 'bg-gray-600', t: '' };
     if (pw.length < 6) return { w: '30%', c: 'bg-red-500', t: 'Schwach' };
@@ -21,8 +23,31 @@ export default function AuthPage() {
 
   const strength = checkStrength(password);
 
+  // LOGIK: Username vergessen
+  const handleForgotUsername = async () => {
+    if (!email) return setErrorMsg("Gib deine E-Mail an, um deinen Username zu finden.");
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('migo_tag')
+      .eq('email_internal', email) // Wir nutzen ein internes Feld für die Suche
+      .single();
+    
+    if (data) setInfoMsg(`Dein MigoTag ist: ${data.migo_tag}`);
+    else setErrorMsg("Kein Account mit dieser E-Mail gefunden.");
+  };
+
+  // LOGIK: Passwort vergessen
+  const handleForgotPassword = async () => {
+    if (!email) return setErrorMsg("Gib deine E-Mail ein.");
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) setErrorMsg(error.message);
+    else setInfoMsg("Check deine E-Mails zum Zurücksetzen.");
+  };
+
   const handleAuth = async () => {
     setErrorMsg('');
+    setInfoMsg('');
+    
     if (isRegister) {
       if (!username) return setErrorMsg("Username fehlt!");
       if (password !== confirmPassword) return setErrorMsg("Passwörter ungleich!");
@@ -31,13 +56,33 @@ export default function AuthPage() {
       if (error) return setErrorMsg(error.message);
       
       if (data.user) {
-        const tag = generateMigoTag(username); //
-        await supabase.from('profiles').insert([{ id: data.user.id, display_name: username, migo_tag: tag }]);
-        alert("Account erstellt! Dein Tag: " + tag);
+        const tag = generateMigoTag(username);
+        // Profil erstellen inklusive E-Mail für die spätere Suche
+        await supabase.from('profiles').insert([{ 
+          id: data.user.id, 
+          display_name: username, 
+          migo_tag: tag,
+          email_internal: email 
+        }]);
+        setInfoMsg("Account erstellt! Bitte E-Mail bestätigen.");
       }
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // LOGIN: Entweder per E-Mail oder Username
+      let loginEmail = email;
+      
+      if (!email.includes('@')) {
+        // Wenn kein @ im Feld ist, suchen wir den Usernamen in der DB
+        const { data } = await supabase
+          .from('profiles')
+          .select('email_internal')
+          .eq('display_name', email)
+          .single();
+        if (data) loginEmail = data.email_internal;
+      }
+
+      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
       if (error) setErrorMsg("Login fehlgeschlagen. Daten prüfen.");
+      else router.push('/'); // Weiterleitung zum Chat
     }
   };
 
@@ -52,7 +97,8 @@ export default function AuthPage() {
               className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
           )}
           
-          <input type="email" placeholder="E-Mail Adresse" onChange={e => setEmail(e.target.value)}
+          <input type="text" placeholder={isRegister ? "E-Mail Adresse" : "Username oder E-Mail"} 
+            onChange={e => setEmail(e.target.value)}
             className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
           
           <div className="relative">
@@ -71,6 +117,7 @@ export default function AuthPage() {
           )}
 
           {errorMsg && <p className="text-red-400 text-xs text-center">{errorMsg}</p>}
+          {infoMsg && <p className="text-green-400 text-xs text-center">{infoMsg}</p>}
 
           <button onClick={handleAuth} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold p-3 rounded transition-colors shadow-lg">
             {isRegister ? 'JETZT REGISTRIEREN' : 'EINLOGGEN'}
@@ -83,8 +130,8 @@ export default function AuthPage() {
           </button>
           
           <div className="flex justify-around text-[11px] text-gray-500">
-            <button className="hover:text-gray-300">Username vergessen?</button>
-            <button className="hover:text-gray-300">Passwort vergessen?</button>
+            <button onClick={handleForgotUsername} className="hover:text-gray-300">Username vergessen?</button>
+            <button onClick={handleForgotPassword} className="hover:text-gray-300">Passwort vergessen?</button>
           </div>
         </div>
       </div>
