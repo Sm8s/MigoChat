@@ -7,6 +7,7 @@ import { supabase } from '@/app/supabaseClient';
 type ProfileRow = {
   id: string;
   username: string | null;
+  migo_tag: string | null;
   avatar_url: string | null;
 };
 
@@ -36,43 +37,26 @@ export default function ProfilePage() {
 
       const userId = session.user.id;
 
-      const { data: existing, error: fetchErr } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, avatar_url')
+        .select('id, username, migo_tag, avatar_url')
         .eq('id', userId)
         .maybeSingle();
 
-      if (fetchErr) {
-        setErrorMsg(fetchErr.message);
+      if (error) {
+        setErrorMsg(error.message);
         setLoading(false);
         return;
       }
 
-      if (!existing) {
-        const email = session.user.email ?? '';
-        const base = email ? email.split('@')[0] : 'user';
-
-        const { data: created, error: createErr } = await supabase
-          .from('profiles')
-          .upsert(
-            { id: userId, username: base, avatar_url: null },
-            { onConflict: 'id' }
-          )
-          .select('id, username, avatar_url')
-          .single();
-
-        if (createErr) {
-          setErrorMsg(createErr.message);
-          setLoading(false);
-          return;
-        }
-
-        setProfile(created);
+      if (!data) {
+        // Wenn Trigger korrekt läuft, sollte das nie passieren.
+        setErrorMsg('Profil nicht gefunden. (Trigger/Profil-Setup prüfen)');
         setLoading(false);
         return;
       }
 
-      setProfile(existing);
+      setProfile(data);
       setLoading(false);
     };
 
@@ -94,23 +78,19 @@ export default function ProfilePage() {
           <div className="font-bold text-white mb-2">Fehler beim Laden</div>
           <div className="text-sm text-gray-400 break-all">{errorMsg}</div>
         </div>
-        <button onClick={() => router.push('/')} className="px-4 py-2 rounded bg-[#248046] text-white font-semibold">
+        <button
+          onClick={() => router.push('/')}
+          className="px-4 py-2 rounded bg-[#248046] text-white font-semibold"
+        >
           Zurück
         </button>
       </div>
     );
   }
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-[#313338] flex flex-col items-center justify-center text-gray-300 gap-4">
-        <div>Profil nicht gefunden.</div>
-        <button onClick={() => router.push('/')} className="px-4 py-2 rounded bg-[#248046] text-white font-semibold">
-          Zurück
-        </button>
-      </div>
-    );
-  }
+  if (!profile) return null;
+
+  const fullName = `${profile.username ?? 'user'}#${profile.migo_tag ?? '----'}`;
 
   return (
     <div className="min-h-screen bg-[#313338] text-white">
@@ -129,9 +109,15 @@ export default function ProfilePage() {
             </div>
 
             <div className="min-w-0">
-              <div className="text-xl font-black truncate">{profile.username ?? 'Unbenannt'}</div>
-              <div className="text-sm text-gray-300">ID: {profile.id}</div>
+              <div className="text-xl font-black truncate">{fullName}</div>
+              <div className="text-sm text-gray-300 truncate">
+                Dein MigoTag: <span className="font-semibold">{profile.migo_tag ?? '----'}</span>
+              </div>
             </div>
+          </div>
+
+          <div className="mt-6 text-xs text-gray-500">
+            User-ID: {profile.id}
           </div>
         </div>
       </main>
