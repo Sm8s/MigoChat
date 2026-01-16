@@ -1,138 +1,224 @@
 'use client';
-import { useState } from 'react';
+
+import { useMemo, useState } from 'react';
 import { supabase } from '@/app/supabaseClient';
-import { generateMigoTag } from '@/lib/migo-logic';
 import { useRouter } from 'next/navigation';
 
 export default function AuthPage() {
+  const router = useRouter();
+
   const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState(''); // Eindeutiger Migo-Name
+  const [identifier, setIdentifier] = useState(''); // username ODER email beim Login
+  const [email, setEmail] = useState(''); // nur beim Register
+  const [username, setUsername] = useState(''); // nur beim Register
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
-  const router = useRouter();
+  const [busy, setBusy] = useState(false);
 
-  const checkStrength = (pw: string) => {
-    if (pw.length === 0) return { w: '0%', c: 'bg-gray-600', t: '' };
-    if (pw.length < 6) return { w: '30%', c: 'bg-red-500', t: 'Schwach' };
-    if (pw.length < 10) return { w: '60%', c: 'bg-yellow-500', t: 'Mittel' };
+  const strength = useMemo(() => {
+    if (password.length === 0) return { w: '0%', c: 'bg-gray-600', t: '' };
+    if (password.length < 6) return { w: '30%', c: 'bg-red-500', t: 'Schwach' };
+    if (password.length < 10) return { w: '60%', c: 'bg-yellow-500', t: 'Mittel' };
     return { w: '100%', c: 'bg-green-500', t: 'Stark' };
-  };
+  }, [password]);
 
-  const strength = checkStrength(password);
+  const resolveEmailFromUsername = async (name: string) => {
+    const clean = name.trim();
 
-  // LOGIK: Username vergessen
-  const handleForgotUsername = async () => {
-    if (!email) return setErrorMsg("Gib deine E-Mail an, um deinen Username zu finden.");
     const { data, error } = await supabase
       .from('profiles')
-      .select('migo_tag')
-      .eq('email_internal', email) // Wir nutzen ein internes Feld für die Suche
-      .single();
-    
-    if (data) setInfoMsg(`Dein MigoTag ist: ${data.migo_tag}`);
-    else setErrorMsg("Kein Account mit dieser E-Mail gefunden.");
+      .select('email_internal')
+      .ilike('username', clean)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    const mail = data?.email_internal?.trim();
+    if (!mail) throw new Error('Username nicht gefunden.');
+    return mail;
   };
 
-  // LOGIK: Passwort vergessen
   const handleForgotPassword = async () => {
-    if (!email) return setErrorMsg("Gib deine E-Mail ein.");
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    if (error) setErrorMsg(error.message);
-    else setInfoMsg("Check deine E-Mails zum Zurücksetzen.");
+    setErrorMsg('');
+    setInfoMsg('');
+
+    const input = identifier.trim();
+    if (!input) {
+      setErrorMsg('Gib Username oder E-Mail ein.');
+      return;
+    }
+
+    try {
+      setBusy(true);
+      const mail = input.includes('@') ? input : await resolveEmailFromUsername(input);
+
+      const { error } = await supabase.auth.resetPasswordForEmail(mail);
+      if (error) setErrorMsg(error.message);
+      else setInfoMsg('Check deine E-Mails zum Zurücksetzen.');
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? 'Fehler beim Zurücksetzen.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleAuth = async () => {
     setErrorMsg('');
     setInfoMsg('');
-    
-    if (isRegister) {
-      if (!username) return setErrorMsg("Username fehlt!");
-      if (password !== confirmPassword) return setErrorMsg("Passwörter ungleich!");
-      
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) return setErrorMsg(error.message);
-      
-      if (data.user) {
-        const tag = generateMigoTag(username);
-        // Profil erstellen inklusive E-Mail für die spätere Suche
-        await supabase.from('profiles').insert([{ 
-          id: data.user.id, 
-          display_name: username, 
-          migo_tag: tag,
-          email_internal: email 
-        }]);
-        setInfoMsg("Account erstellt! Bitte E-Mail bestätigen.");
-      }
-    } else {
-      // LOGIN: Entweder per E-Mail oder Username
-      let loginEmail = email;
-      
-      if (!email.includes('@')) {
-        // Wenn kein @ im Feld ist, suchen wir den Usernamen in der DB
-        const { data } = await supabase
-          .from('profiles')
-          .select('email_internal')
-          .eq('display_name', email)
-          .single();
-        if (data) loginEmail = data.email_internal;
+
+    try {
+      setBusy(true);
+
+      if (isRegister) {
+        const mail = email.trim().toLowerCase();
+        const name = username.trim();
+
+        if (!mail.includes('@')) throw new Error('Bitte eine gültige E-Mail eingeben.');
+        if (!name) throw new Error('Username fehlt!');
+        if (password !== confirmPassword) throw new Error('Passwörter sind ungleich.');
+
+        const { error } = await supabase.auth.signUp({
+          email: mail,
+          password,
+          options: {
+            data: { username: name }, // <-- wichtig für Trigger
+          },
+        });
+
+        if (error) throw new Error(error.message);
+
+        setInfoMsg('Account erstellt! Bitte E-Mail bestätigen.');
+        return;
       }
 
-      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
-      if (error) setErrorMsg("Login fehlgeschlagen. Daten prüfen.");
-      else router.push('/'); // Weiterleitung zum Chat
+      // LOGIN: identifier kann username oder email sein
+      const input = identifier.trim();
+      if (!input) throw new Error('Gib Username oder E-Mail ein.');
+
+      const loginEmail = input.includes('@')
+        ? input.trim().toLowerCase()
+        : await resolveEmailFromUsername(input);
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password,
+      });
+
+      if (error) throw new Error('Login fehlgeschlagen. Daten prüfen.');
+
+      router.push('/');
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? 'Unbekannter Fehler.');
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-[#1e1f22] flex items-center justify-center font-sans">
       <div className="bg-[#313338] p-8 rounded-lg shadow-2xl w-full max-w-md border border-gray-800">
-        <h1 className="text-white text-3xl font-black mb-8 text-center tracking-tighter italic">MIGOCHAT</h1>
-        
+        <h1 className="text-white text-3xl font-black mb-8 text-center tracking-tighter italic">
+          MIGOCHAT
+        </h1>
+
         <div className="space-y-4">
-          {isRegister && (
-            <input type="text" placeholder="Wähle deinen Username" onChange={e => setUsername(e.target.value)}
-              className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
+          {isRegister ? (
+            <>
+              <input
+                type="text"
+                placeholder="Wähle deinen Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all"
+              />
+
+              <input
+                type="email"
+                placeholder="E-Mail Adresse"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all"
+              />
+            </>
+          ) : (
+            <input
+              type="text"
+              placeholder="Username oder E-Mail"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all"
+            />
           )}
-          
-          <input type="text" placeholder={isRegister ? "E-Mail Adresse" : "Username oder E-Mail"} 
-            onChange={e => setEmail(e.target.value)}
-            className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
-          
+
           <div className="relative">
-            <input type="password" placeholder="Passwort" onChange={e => setPassword(e.target.value)}
-              className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
+            <input
+              type="password"
+              placeholder="Passwort"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all"
+            />
+
             {isRegister && (
-              <div className="mt-2 h-1 w-full bg-gray-700 rounded overflow-hidden">
-                <div className={`h-full transition-all duration-500 ${strength.c}`} style={{ width: strength.w }}></div>
+              <div className="mt-2">
+                <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1">
+                  <span>Stärke</span>
+                  <span>{strength.t}</span>
+                </div>
+                <div className="h-1 w-full bg-gray-700 rounded overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${strength.c}`}
+                    style={{ width: strength.w }}
+                  />
+                </div>
               </div>
             )}
           </div>
 
           {isRegister && (
-            <input type="password" placeholder="Passwort wiederholen" onChange={e => setConfirmPassword(e.target.value)}
-              className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all" />
+            <input
+              type="password"
+              placeholder="Passwort wiederholen"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full p-3 bg-[#1e1f22] text-white rounded outline-none border border-transparent focus:border-indigo-500 transition-all"
+            />
           )}
 
           {errorMsg && <p className="text-red-400 text-xs text-center">{errorMsg}</p>}
           {infoMsg && <p className="text-green-400 text-xs text-center">{infoMsg}</p>}
 
-          <button onClick={handleAuth} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold p-3 rounded transition-colors shadow-lg">
-            {isRegister ? 'JETZT REGISTRIEREN' : 'EINLOGGEN'}
+          <button
+            disabled={busy}
+            onClick={handleAuth}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold p-3 rounded transition-colors shadow-lg"
+          >
+            {busy ? '...' : isRegister ? 'JETZT REGISTRIEREN' : 'EINLOGGEN'}
           </button>
         </div>
 
         <div className="mt-6 flex flex-col gap-3 text-sm text-center">
-          <button onClick={() => setIsRegister(!isRegister)} className="text-indigo-400 hover:text-indigo-300">
+          <button
+            onClick={() => {
+              setErrorMsg('');
+              setInfoMsg('');
+              setPassword('');
+              setConfirmPassword('');
+              setIsRegister(!isRegister);
+            }}
+            className="text-indigo-400 hover:text-indigo-300"
+          >
             {isRegister ? 'Doch lieber einloggen?' : 'Noch kein Migo? Account erstellen'}
           </button>
-          
-          <div className="flex justify-around text-[11px] text-gray-500">
-            <button onClick={handleForgotUsername} className="hover:text-gray-300">Username vergessen?</button>
-            <button onClick={handleForgotPassword} className="hover:text-gray-300">Passwort vergessen?</button>
-          </div>
+
+          {!isRegister && (
+            <div className="flex justify-around text-[11px] text-gray-500">
+              <button disabled={busy} onClick={handleForgotPassword} className="hover:text-gray-300">
+                Passwort vergessen?
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

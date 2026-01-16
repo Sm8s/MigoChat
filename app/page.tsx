@@ -1,4 +1,5 @@
 'use client';
+
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/app/supabaseClient';
@@ -7,15 +8,24 @@ import Sidebar from '@/components/Sidebar';
 import FriendsList from '@/components/FriendsList';
 import AddFriendModal from '@/components/AddFriendModal';
 
+// Definition eines Interfaces für bessere Typensicherheit
+interface UserSession {
+  user: {
+    id: string;
+    email?: string;
+  };
+}
+
 export default function ChatPage() {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'all' | 'online' | 'pending'>('online');
   const [showAddModal, setShowAddModal] = useState(false);
   const router = useRouter();
 
-  // Stabiles Status-Update
+  // Status-Update Funktion (verhindert Fehler durch fehlende IDs)
   const handleStatusUpdate = useCallback(async (userId: string, status: 'online' | 'offline') => {
+    if (!userId) return;
     try {
       await updateUserStatus(userId, status);
     } catch (err) {
@@ -35,25 +45,17 @@ export default function ChatPage() {
       }
 
       if (mounted) {
-        setSession(currentSession);
+        setSession(currentSession as UserSession);
         setLoading(false);
+        // User beim Einloggen online setzen
         await handleStatusUpdate(currentSession.user.id, 'online');
       }
     };
 
     getSession();
 
-    // Realtime-Subscription für Profiländerungen (z.B. Status-Updates von Freunden)
-    const profileSubscription = supabase
-      .channel('public:profiles')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => {
-        // Hier könnte man einen Refresh-Trigger für die FriendsList einbauen
-      })
-      .subscribe();
-
     const handleTabClose = () => {
       if (session?.user?.id) {
-        // navigator.sendBeacon ist zuverlässiger für Tab-Close
         handleStatusUpdate(session.user.id, 'offline');
       }
     };
@@ -63,24 +65,27 @@ export default function ChatPage() {
     return () => {
       mounted = false;
       window.removeEventListener('beforeunload', handleTabClose);
-      supabase.removeChannel(profileSubscription);
     };
   }, [router, handleStatusUpdate, session?.user?.id]);
 
-  // WICHTIG für Vercel-Build: Verhindert Zugriff auf 'session' bevor geladen
-  if (loading) return (
-    <div className="h-screen bg-[#1e1f22] flex flex-col items-center justify-center text-white">
-      <div className="animate-pulse text-2xl font-black tracking-tighter mb-4 italic">MIGOCHAT</div>
-      <div className="w-48 h-1 bg-gray-800 rounded-full overflow-hidden">
-        <div className="bg-indigo-500 h-full animate-progress shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>
+  // WICHTIG: Verhindert Prerendering-Fehler auf Vercel
+  if (loading) {
+    return (
+      <div className="h-screen bg-[#1e1f22] flex flex-col items-center justify-center text-white">
+        <div className="animate-pulse text-2xl font-black tracking-tighter mb-4 italic uppercase">MIGOCHAT</div>
+        <div className="w-48 h-1 bg-gray-800 rounded-full overflow-hidden">
+          <div className="bg-indigo-500 h-full animate-progress shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
   
-  if (!session) return null;
+  // Rendert erst, wenn die Session sicher existiert
+  if (!session?.user?.id) return null;
 
   return (
     <div className="flex h-screen bg-[#313338] overflow-hidden font-sans select-none text-rendering-optimizeLegibility">
+      {/* Übergabe der ID an Sidebar */}
       <Sidebar currentUserId={session.user.id} />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -124,7 +129,7 @@ export default function ChatPage() {
         </header>
 
         <main className="flex-1 flex overflow-hidden">
-          <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#313338] relative">
+          <div className="flex-1 overflow-y-auto bg-[#313338] relative">
             <FriendsList 
                currentUserId={session.user.id} 
                filter={activeTab} 
@@ -137,7 +142,7 @@ export default function ChatPage() {
               <div className="bg-[#2b2d31] p-4 rounded-xl border border-gray-800 hover:border-gray-700 transition-all cursor-default">
                 <p className="text-white text-[13px] font-bold mb-1">Zurzeit ist es ruhig...</p>
                 <p className="text-gray-400 text-[11px] leading-relaxed">
-                  Wenn deine Freunde aktiv sind (z.B. Gaming oder Musik), siehst du das hier in Echtzeit!
+                  Wenn deine Freunde aktiv sind, siehst du das hier in Echtzeit!
                 </p>
               </div>
             </div>
@@ -146,25 +151,23 @@ export default function ChatPage() {
       </div>
 
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-[4px] p-4 transition-all duration-300">
-          <div className="w-full max-w-md bg-[#313338] rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-gray-700 overflow-hidden animate-in zoom-in-95 fade-in duration-200">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-[4px] p-4">
+          <div className="w-full max-w-md bg-[#313338] rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
             <div className="flex justify-between items-center p-4 bg-[#2b2d31]">
               <h2 className="text-white font-bold text-base uppercase tracking-tight">Freund hinzufügen</h2>
               <button 
                 onClick={() => setShowAddModal(false)} 
-                className="text-gray-400 hover:text-white transition-colors p-2 hover:bg-gray-700 rounded-full"
+                className="text-gray-400 hover:text-white p-2 hover:bg-gray-700 rounded-full"
               >
                 ✕
               </button>
             </div>
             <div className="p-6">
-              <AddFriendModal currentUserId={session.user.id} onSuccess={() => setShowAddModal(false)} />
-              <div className="mt-6 p-4 bg-[#1e1f22] rounded-lg border border-gray-800">
-                <h4 className="text-white text-[10px] font-bold uppercase mb-2 text-indigo-400">Pro-Tipp</h4>
-                <p className="text-[11px] text-gray-400 leading-normal italic">
-                  Suche nach dem exakten MigoTag (z.B. user#0001). Die Raute und die vier Zahlen am Ende sind wichtig!
-                </p>
-              </div>
+              {/* Prop-Korrektur: currentUserId statt session direkt */}
+              <AddFriendModal 
+                currentUserId={session.user.id} 
+                onSuccess={() => setShowAddModal(false)} 
+              />
             </div>
           </div>
         </div>
