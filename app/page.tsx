@@ -12,8 +12,8 @@ interface UserSession {
   user: { id: string; email?: string; };
 }
 
-// Neue Typen für die erweiterten Funktionen
-type MainView = 'friends' | 'discover' | 'nitro' | 'activity';
+// "Migo Aura" als neuer Premium-Standard
+type MainView = 'friends' | 'discover' | 'aura' | 'activity' | 'vault';
 
 export default function ChatPage() {
   const [session, setSession] = useState<UserSession | null>(null);
@@ -47,188 +47,186 @@ export default function ChatPage() {
   }, [router, handleStatusUpdate]);
 
   if (loading) return (
-    <div className="h-screen bg-[#111214] flex flex-col items-center justify-center">
-      <div className="relative w-20 h-20 mb-6">
-        <div className="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
-        <div className="absolute inset-0 border-t-4 border-indigo-500 rounded-full animate-spin"></div>
+    <div className="h-screen bg-[#0a0a0c] flex flex-col items-center justify-center">
+      <div className="relative w-24 h-24 mb-6">
+        <div className="absolute inset-0 border-[3px] border-indigo-500/10 rounded-full"></div>
+        <div className="absolute inset-0 border-t-[3px] border-indigo-500 rounded-full animate-spin"></div>
+        <div className="absolute inset-4 border-t-[3px] border-purple-500 rounded-full animate-spin-reverse opacity-50"></div>
       </div>
-      <div className="text-indigo-400 font-black tracking-[0.3em] uppercase text-xs animate-pulse">Initializing Migo</div>
+      <div className="text-white font-black tracking-[0.4em] uppercase text-[10px] animate-pulse">Syncing Aura System</div>
     </div>
   );
 
   return (
-    <div className="flex h-screen bg-[#111214] text-gray-100 font-sans selection:bg-indigo-500/30 overflow-hidden">
+    <div className="flex h-screen bg-[#0a0a0c] text-gray-100 font-sans selection:bg-indigo-500/30 overflow-hidden">
       
-      {/* Markellose Sidebar */}
       <Sidebar
         currentUserId={session!.user.id}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
       />
 
-      {/* Main Container mit edlem Radius */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#313338] md:my-2 md:mr-2 md:rounded-[24px] shadow-2xl border border-white/5 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-[#1e1f22] md:my-2 md:mr-2 md:rounded-[32px] shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/[0.03] overflow-hidden relative">
         
-        {/* High-End Header */}
-        <header className="h-14 flex items-center justify-between px-6 bg-[#313338]/95 backdrop-blur-md border-b border-white/5 z-20 shrink-0">
-          <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
-            <button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-gray-400 hover:text-white text-xl">☰</button>
+        {/* Navigation Header */}
+        <header className="h-16 flex items-center justify-between px-8 bg-[#1e1f22]/80 backdrop-blur-2xl border-b border-white/[0.03] z-20 shrink-0">
+          <div className="flex items-center gap-8 overflow-x-auto no-scrollbar">
+            <button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-gray-400 hover:text-white">☰</button>
             
-            <div className="flex items-center gap-3 pr-4 border-r border-white/10 shrink-0">
-              <div className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_#22c55e]"></div>
-              <span className="font-bold tracking-tight">Migo Dashboard</span>
-            </div>
-            
-            {/* Main Navigation Buttons */}
-            <nav className="flex items-center gap-1">
+            <nav className="flex items-center gap-2">
               {[
-                { id: 'friends', label: 'Freunde', icon: '👥' },
-                { id: 'discover', label: 'Entdecken', icon: '🌍' },
-                { id: 'nitro', label: 'Migo Nitro', icon: '💎' },
-                { id: 'activity', label: 'Aktivität', icon: '📊' }
+                { id: 'friends', label: 'Hub', icon: '💎' },
+                { id: 'discover', label: 'Explore', icon: '🪐' },
+                { id: 'aura', label: 'Migo Aura', icon: '✨' },
+                { id: 'vault', label: 'The Vault', icon: '🔐' }
               ].map((btn) => (
                 <button
                   key={btn.id}
                   onClick={() => setCurrentView(btn.id as MainView)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                    currentView === btn.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                  className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${
+                    currentView === btn.id ? 'bg-white text-black shadow-xl shadow-white/10' : 'text-gray-500 hover:text-gray-200 hover:bg-white/5'
                   }`}
                 >
-                  <span>{btn.icon}</span> {btn.label}
+                  <span className="text-sm">{btn.icon}</span> {btn.label}
                 </button>
               ))}
             </nav>
           </div>
 
-          <div className="hidden lg:flex items-center gap-4">
-            <div className="relative group">
-              <input 
-                type="text" 
-                placeholder="Schnellsuche..." 
-                className="bg-[#1e1f22] border border-transparent focus:border-indigo-500/50 rounded-lg py-1.5 px-3 text-xs w-40 focus:w-60 transition-all outline-none"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <span className="absolute right-3 top-1.5 text-[10px] text-gray-600 font-bold group-focus-within:hidden">ALT+S</span>
-            </div>
+          <div className="hidden lg:flex items-center gap-5">
             <button 
               onClick={() => setShowAddModal(true)}
-              className="bg-[#248046] hover:bg-[#1a6334] text-white text-[11px] font-black uppercase tracking-widest py-2 px-4 rounded-lg shadow-lg active:scale-95 transition-all"
+              className="bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase tracking-[0.2em] py-2.5 px-5 rounded-xl shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
             >
-              Hinzufügen
+              Add Connection
             </button>
           </div>
         </header>
 
-        {/* Dynamic Content Area */}
         <main className="flex-1 flex overflow-hidden">
-          
-          <div className="flex-1 overflow-y-auto p-6 relative bg-gradient-to-br from-transparent to-black/5">
-            <div className="max-w-6xl mx-auto space-y-6">
-              
-              {/* Conditional Rendering der Seiten */}
-              {currentView === 'friends' && (
-                <>
-                  <div className="flex justify-between items-end mb-4">
-                    <h2 className="text-xl font-black tracking-tighter">Deine Kontakte</h2>
-                    <div className="flex bg-[#1e1f22] p-1 rounded-lg">
-                      {['online', 'all', 'pending'].map((t) => (
-                        <button 
-                          key={t}
-                          onClick={() => setActiveTab(t as any)}
-                          className={`px-4 py-1 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === t ? 'bg-[#3f4147] text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                    </div>
+          <div className="flex-1 overflow-y-auto p-8 relative scrollbar-hide">
+            
+            {/* View: FRIENDS */}
+            {currentView === 'friends' && (
+              <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-3xl font-black tracking-tighter">Your Network</h2>
+                  <div className="flex bg-black/20 p-1.5 rounded-2xl border border-white/5">
+                    {['online', 'all', 'pending'].map((t) => (
+                      <button 
+                        key={t}
+                        onClick={() => setActiveTab(t as any)}
+                        className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === t ? 'bg-[#313338] text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                      >
+                        {t}
+                      </button>
+                    ))}
                   </div>
-                  <div className="bg-[#2b2d31]/40 rounded-3xl border border-white/5 backdrop-blur-sm overflow-hidden min-h-[400px]">
-                    <FriendsList currentUserId={session!.user.id} filter={activeTab} />
-                  </div>
-                </>
-              )}
+                </div>
+                <div className="bg-[#2b2d31]/30 rounded-[40px] border border-white/[0.03] backdrop-blur-md overflow-hidden min-h-[500px] shadow-inner">
+                  <FriendsList currentUserId={session!.user.id} filter={activeTab} />
+                </div>
+              </div>
+            )}
 
-              {currentView === 'discover' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  {[1, 2, 3, 4, 5, 6].map((i) => (
-                    <div key={i} className="group bg-[#2b2d31] rounded-2xl overflow-hidden border border-white/5 hover:border-indigo-500/50 transition-all">
-                      <div className="h-24 bg-indigo-900/50 relative">
-                        <div className="absolute top-4 right-4 bg-black/40 px-2 py-1 rounded text-[10px] font-bold">TOP COMMUNITY</div>
-                      </div>
-                      <div className="p-5">
-                        <h3 className="font-bold text-white mb-1">Migo Community #{i}</h3>
-                        <p className="text-xs text-gray-400 mb-4 line-clamp-2">Tritt dieser exklusiven Gruppe bei und entdecke neue Leute.</p>
-                        <button className="w-full py-2 bg-white/5 hover:bg-indigo-600 text-xs font-bold rounded-lg transition-all">Beitreten</button>
-                      </div>
+            {/* View: MIGO AURA (Das "krasse" Verkaufs-Feature) */}
+            {currentView === 'aura' && (
+              <div className="max-w-5xl mx-auto py-10 animate-in zoom-in-95 duration-700">
+                <div className="text-center mb-16">
+                  <span className="bg-indigo-500/10 text-indigo-400 text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-[0.3em] border border-indigo-500/20">Elevate your Status</span>
+                  <h1 className="text-6xl font-black tracking-tighter mt-6 mb-4 bg-gradient-to-b from-white to-gray-500 bg-clip-text text-transparent italic">MIGO AURA</h1>
+                  <p className="text-gray-500 max-w-lg mx-auto text-sm leading-relaxed font-medium">Lass die Standard-User hinter dir. Aura ist kein Abo, es ist ein Upgrade deiner digitalen Existenz.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+                  {[
+                    { title: 'Ghost Mode', desc: 'Werde unsichtbar. Keine Read-Receipts, kein "Tippt gerade...", volle Kontrolle.', icon: '👻' },
+                    { title: 'Aura Badges', desc: 'Exklusive, animierte Badges in deinem Profil, die auf deine Stimmung reagieren.', icon: '🛡️' },
+                    { title: 'Ultra Streaming', desc: 'Übertrage in 4K bei 120 FPS ohne Verzögerung für deine gesamte Crew.', icon: '🎬' }
+                  ].map((f, i) => (
+                    <div key={i} className="bg-white/[0.02] border border-white/[0.05] p-8 rounded-[32px] hover:bg-white/[0.05] transition-all group">
+                      <div className="text-3xl mb-4 group-hover:scale-110 transition-transform duration-500">{f.icon}</div>
+                      <h3 className="text-lg font-bold text-white mb-2">{f.title}</h3>
+                      <p className="text-xs text-gray-500 leading-relaxed font-medium">{f.desc}</p>
                     </div>
                   ))}
                 </div>
-              )}
 
-              {currentView === 'nitro' && (
-                <div className="flex flex-col items-center justify-center py-12 text-center animate-in zoom-in-95 duration-500">
-                  <div className="text-6xl mb-6">💎</div>
-                  <h2 className="text-3xl font-black tracking-tighter mb-2 italic">MIGO NITRO</h2>
-                  <p className="text-gray-400 max-w-md mb-8">Schalte exklusive Badges, größere Uploads und HD-Streaming frei. Werde Teil der Elite.</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
-                    <div className="p-8 bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl shadow-xl hover:scale-105 transition-all cursor-pointer">
-                      <h3 className="text-xl font-bold mb-1">Monthly</h3>
-                      <div className="text-3xl font-black mb-4">9,99€</div>
-                      <button className="w-full py-3 bg-white text-indigo-600 font-bold rounded-xl">Abonnieren</button>
+                <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 p-[1px] rounded-[40px] shadow-[0_20px_50px_rgba(79,70,229,0.3)]">
+                  <div className="bg-[#0a0a0c] rounded-[40px] p-12 flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div>
+                      <h2 className="text-3xl font-black italic">ULTIMATE AURA</h2>
+                      <p className="text-gray-400 text-sm mt-2 font-medium">Vollzugriff auf alle Features + Early Access.</p>
                     </div>
-                    <div className="p-8 bg-[#2b2d31] rounded-3xl border border-white/10 hover:border-indigo-500 transition-all cursor-pointer">
-                      <h3 className="text-xl font-bold mb-1 text-gray-300">Yearly</h3>
-                      <div className="text-3xl font-black mb-4">99,99€</div>
-                      <button className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl">Sparen & Abonnieren</button>
+                    <div className="flex flex-col items-end gap-3">
+                      <div className="text-4xl font-black">€8.99 <span className="text-sm text-gray-500 font-normal">/mo</span></div>
+                      <button className="bg-white text-black px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/10">
+                        Get Aura Now
+                      </button>
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* View: THE VAULT (Exklusives Bonus Feature) */}
+            {currentView === 'vault' && (
+              <div className="h-full flex flex-col items-center justify-center text-center p-12 animate-in fade-in duration-1000">
+                <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center text-4xl mb-6 border border-white/10 shadow-2xl">🔐</div>
+                <h2 className="text-2xl font-black tracking-tight mb-2 uppercase">The Vault</h2>
+                <p className="text-gray-500 max-w-sm text-xs font-medium leading-relaxed">
+                  Dies ist dein privater, verschlüsselter Speicher. Nur für Aura-Mitglieder verfügbar. Sichere deine wichtigsten Dateien mit Ende-zu-Ende Verschlüsselung.
+                </p>
+                <button 
+                  onClick={() => setCurrentView('aura')}
+                  className="mt-8 text-indigo-400 text-[10px] font-black uppercase tracking-[0.3em] hover:text-white transition-colors"
+                >
+                  Upgrade to unlock
+                </button>
+              </div>
+            )}
+
           </div>
 
-          {/* Activity Sidebar (Andere Liga) */}
-          <aside className="w-80 border-l border-white/5 hidden xl:flex flex-col p-6 bg-[#2b2d31]/30 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">Live Status</h3>
-              <div className="flex gap-1">
-                <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
+          {/* Activity Sidebar */}
+          <aside className="w-80 border-l border-white/[0.03] hidden xl:flex flex-col p-8 bg-black/10 backdrop-blur-md">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-600 mb-8">Pulse Feed</h3>
+            
+            <div className="space-y-6">
               {[
-                { name: 'System', text: 'Migo-Server stabil (99.9%)', time: 'Now', color: 'text-green-400' },
-                { name: 'Updates', text: 'Neues UI-Update eingespielt.', time: '2m', color: 'text-indigo-400' }
+                { user: 'System', msg: 'Aura Servers Optimized', time: 'Now', color: 'bg-green-500' },
+                { user: 'Dev-Team', msg: 'New "Ghost Mode" deployed', time: '14m', color: 'bg-indigo-500' }
               ].map((log, i) => (
-                <div key={i} className="p-4 rounded-2xl bg-[#1e1f22]/50 border border-white/5 hover:bg-[#1e1f22] transition-all group">
+                <div key={i} className="relative pl-6 border-l border-white/5 pb-2">
+                  <div className={`absolute -left-[4px] top-0 w-2 h-2 rounded-full ${log.color} shadow-[0_0_10px_inherit]`}></div>
                   <div className="flex justify-between items-center mb-1">
-                    <span className={`text-[11px] font-black uppercase tracking-wider ${log.color}`}>{log.name}</span>
-                    <span className="text-[10px] text-gray-600">{log.time}</span>
+                    <span className="text-[10px] font-black uppercase tracking-tighter text-white/80">{log.user}</span>
+                    <span className="text-[9px] text-gray-600 font-bold">{log.time}</span>
                   </div>
-                  <p className="text-[12px] text-gray-300 leading-snug">{log.text}</p>
+                  <p className="text-[11px] text-gray-500 font-medium">{log.msg}</p>
                 </div>
               ))}
             </div>
 
-            <div className="mt-auto p-5 bg-indigo-600/10 border border-indigo-500/20 rounded-2xl">
-              <p className="text-[11px] font-bold text-indigo-300 uppercase tracking-widest mb-1">Wusstest du schon?</p>
-              <p className="text-[10px] text-gray-500">Du kannst jetzt Freunde über den Migo-Tag weltweit finden.</p>
+            <div className="mt-auto p-6 bg-white/[0.02] border border-white/[0.05] rounded-[24px]">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-amber-500">🔥</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-white">Daily Streak</span>
+              </div>
+              <p className="text-[10px] text-gray-500 font-medium">Du bist seit 12 Tagen aktiv. Aura-Mitglieder erhalten Bonus-Aura-Points!</p>
             </div>
           </aside>
         </main>
       </div>
 
-      {/* Modal Integration */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] backdrop-blur-[8px] p-4">
-          <div className="w-full max-w-md bg-[#313338] rounded-[24px] shadow-2xl border border-white/10 overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center p-5 bg-[#2b2d31]">
-              <h2 className="text-white font-black text-sm uppercase tracking-widest">Connect People</h2>
-              <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-white p-2 hover:bg-white/5 rounded-full transition-all">✕</button>
+        <div className="fixed inset-0 bg-[#0a0a0c]/90 flex items-center justify-center z-[100] backdrop-blur-xl p-4">
+          <div className="w-full max-w-md bg-[#1e1f22] rounded-[40px] shadow-[0_0_100px_rgba(0,0,0,0.8)] border border-white/10 overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-center p-6 bg-white/[0.02]">
+              <h2 className="text-white font-black text-xs uppercase tracking-[0.2em]">New Connection</h2>
+              <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-white p-2">✕</button>
             </div>
-            <div className="p-8">
+            <div className="p-10">
               <AddFriendModal currentUserId={session!.user.id} onSuccess={() => setShowAddModal(false)} />
             </div>
           </div>
