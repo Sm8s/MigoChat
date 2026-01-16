@@ -9,262 +9,230 @@ type ProfileRow = {
   username: string | null;
   migo_tag: string | null;
   avatar_url: string | null;
+  bio: string | null;
+  is_aura: boolean;
+  two_factor_enabled: boolean;
 };
 
 export default function ProfilePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'security'>('overview');
-  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'aura' | 'security'>('overview');
+  
+  // Form States
+  const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      setLoading(true);
-      setErrorMsg(null);
-
-      const { data, error: sessionErr } = await supabase.auth.getSession();
-      if (sessionErr) {
-        setErrorMsg(sessionErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const session = data.session;
-      if (!session?.user?.id) {
-        router.push('/login');
-        return;
-      }
-
-      const { data: row, error } = await supabase
-        .from('profiles')
-        .select('id, username, migo_tag, avatar_url')
-        .eq('id', session.user.id)
-        .maybeSingle();
-
-      if (error) setErrorMsg(error.message);
-      else setProfile(row);
-
-      setLoading(false);
-    };
-
     fetchProfile();
-  }, [router]);
+  }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/login');
-  };
+  const fetchProfile = async () => {
+    setLoading(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { router.push('/login'); return; }
 
-  const copyTag = async () => {
-    if (!profile?.migo_tag) return;
-    try {
-      await navigator.clipboard.writeText(profile.migo_tag);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback: nichts
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single();
+
+    if (data) {
+      setProfile(data);
+      setUsername(data.username || '');
+      setBio(data.bio || '');
     }
+    setLoading(false);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#111214] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500" />
-      </div>
-    );
-  }
+  const handleUpdateProfile = async () => {
+    if (!profile) return;
+    setSaving(true);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ username, bio })
+      .eq('id', profile.id);
 
-  if (errorMsg) {
-    return (
-      <div className="min-h-screen bg-[#111214] flex flex-col items-center justify-center text-gray-300 gap-4 p-6">
-        <div className="text-center">
-          <div className="font-bold text-white mb-2">Fehler beim Laden</div>
-          <div className="text-sm text-gray-400 break-all">{errorMsg}</div>
-        </div>
-        <button
-          onClick={() => router.push('/')}
-          className="px-4 py-2 rounded bg-[#248046] text-white font-semibold"
-        >
-          Zurück
-        </button>
-      </div>
-    );
-  }
+    if (!error) {
+      setProfile({ ...profile, username, bio });
+      // Kleiner Erfolgseffekt
+      alert("Profil erfolgreich synchronisiert.");
+    }
+    setSaving(false);
+  };
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-[#111214] flex flex-col items-center justify-center text-gray-300 gap-4">
-        <div>Profil nicht gefunden.</div>
-        <button
-          onClick={() => router.push('/')}
-          className="px-4 py-2 rounded bg-[#248046] text-white font-semibold"
-        >
-          Zurück
-        </button>
-      </div>
-    );
-  }
+  const toggleTwoFactor = async () => {
+    if (!profile) return;
+    const newVal = !profile.two_factor_enabled;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ two_factor_enabled: newVal })
+      .eq('id', profile.id);
+    
+    if (!error) setProfile({ ...profile, two_factor_enabled: newVal });
+  };
 
-  const fullName = `${profile.username ?? 'User'}#${profile.migo_tag ?? '----'}`;
-  const initial = (profile.username ?? 'U')[0].toUpperCase();
+  if (loading) return (
+    <div className="h-screen bg-[#0a0a0c] flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#111214] text-gray-100 font-sans selection:bg-indigo-500/30">
-      {/* Navbar */}
-      <nav className="h-16 border-b border-white/5 bg-[#2b2d31]/50 backdrop-blur-md sticky top-0 z-50 px-4 sm:px-8 flex items-center justify-between">
-        <div className="flex items-center gap-4 min-w-0">
-          <button
-            onClick={() => router.push('/')}
-            className="p-2 hover:bg-white/5 rounded-full transition-colors"
-            aria-label="Zurück"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
+    <div className="min-h-screen bg-[#0a0a0c] text-white font-sans selection:bg-indigo-500/30">
+      
+      {/* High-End Header */}
+      <nav className="h-20 border-b border-white/[0.03] bg-[#111214]/80 backdrop-blur-2xl sticky top-0 z-50 px-10 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <button onClick={() => router.push('/')} className="p-3 hover:bg-white/5 rounded-2xl transition-all group">
+            <svg className="w-5 h-5 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7"/></svg>
           </button>
-          <span className="font-bold text-lg sm:text-xl tracking-tight truncate">Account Settings</span>
+          <h1 className="text-xl font-black tracking-tighter uppercase italic">Account Center</h1>
         </div>
-
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-all duration-200 text-sm font-bold border border-red-500/20"
-        >
-          Logout
-        </button>
+        <div className="flex items-center gap-4">
+          {profile?.is_aura && (
+            <span className="bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest animate-pulse">AURA ACTIVE</span>
+          )}
+          <button onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} className="text-xs font-bold text-gray-500 hover:text-red-500 transition-colors">Abmelden</button>
+        </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto flex gap-8 p-4 sm:p-8">
-        {/* Sidebar Navigation */}
-        <aside className="w-64 shrink-0 space-y-1 hidden md:block">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`w-full text-left px-4 py-2.5 rounded-lg transition-all ${
-              activeTab === 'overview'
-                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                : 'hover:bg-white/5 text-gray-400'
-            }`}
-          >
-            User Profile
-          </button>
-          <button
-            onClick={() => setActiveTab('security')}
-            className={`w-full text-left px-4 py-2.5 rounded-lg transition-all ${
-              activeTab === 'security'
-                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
-                : 'hover:bg-white/5 text-gray-400'
-            }`}
-          >
-            Privacy & Safety
-          </button>
-
-          <div className="h-[1px] bg-white/5 my-4" />
-          <p className="px-4 text-[10px] uppercase tracking-widest text-gray-500 mb-2">App Settings</p>
-          <button className="w-full text-left px-4 py-2.5 rounded-lg text-gray-400 hover:bg-white/5 transition-all">
-            Appearance
-          </button>
-          <button className="w-full text-left px-4 py-2.5 rounded-lg text-gray-400 hover:bg-white/5 transition-all">
-            Notifications
-          </button>
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-10 p-10">
+        
+        {/* Navigation Sidebar */}
+        <aside className="space-y-2">
+          {[
+            { id: 'overview', label: 'Profil Editieren', icon: '👤' },
+            { id: 'aura', label: 'Aura Status', icon: '✨' },
+            { id: 'security', label: 'Privatsphäre', icon: '🛡️' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`w-full flex items-center gap-4 px-6 py-4 rounded-[20px] text-sm font-black transition-all ${
+                activeTab === tab.id ? 'bg-white text-black scale-105 shadow-xl shadow-white/5' : 'text-gray-500 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <span>{tab.icon}</span> {tab.label}
+            </button>
+          ))}
         </aside>
 
-        {/* Content Area */}
-        <main className="flex-1 space-y-6 min-w-0">
-          {/* Header Card */}
-          <section className="bg-[#2b2d31] rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
-            <div className="h-32 bg-gradient-to-r from-indigo-600 to-purple-600 relative">
-              <div className="absolute -bottom-12 left-8 p-1.5 bg-[#2b2d31] rounded-full">
-                <div className="w-24 h-24 bg-indigo-500 rounded-full flex items-center justify-center text-4xl font-black shadow-inner border-4 border-[#2b2d31]">
-                  {initial}
+        {/* Main Content Area */}
+        <main className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          
+          {activeTab === 'overview' && (
+            <div className="space-y-8">
+              {/* Profile Card */}
+              <section className="bg-[#1e1f22] rounded-[40px] border border-white/[0.03] overflow-hidden shadow-2xl">
+                <div className="h-40 bg-gradient-to-br from-indigo-600 via-purple-700 to-blue-600 relative">
+                  <div className="absolute -bottom-14 left-10 p-2 bg-[#1e1f22] rounded-full">
+                    <div className={`w-28 h-28 rounded-full flex items-center justify-center text-4xl font-black shadow-2xl border-4 border-[#1e1f22] ${profile?.is_aura ? 'bg-gradient-to-tr from-indigo-500 to-purple-500 animate-pulse' : 'bg-gray-700'}`}>
+                      {username[0]?.toUpperCase() || 'U'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-20 pb-10 px-10">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-2 block">Anzeigename</label>
+                        <input 
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-4 text-sm font-bold focus:border-indigo-500 outline-none transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-2 block">Bio / Status</label>
+                        <textarea 
+                          value={bio}
+                          onChange={(e) => setBio(e.target.value)}
+                          rows={3}
+                          className="w-full bg-black/20 border border-white/5 rounded-2xl px-6 py-4 text-sm font-bold focus:border-indigo-500 outline-none transition-all resize-none"
+                          placeholder="Erzähl etwas über dich..."
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col justify-end gap-4">
+                      <div className="bg-white/[0.02] p-6 rounded-3xl border border-white/5">
+                        <p className="text-[10px] font-black text-gray-500 uppercase mb-1">Migo-Tag</p>
+                        <p className="text-xl font-mono font-black text-indigo-400">#{profile?.migo_tag}</p>
+                      </div>
+                      <button 
+                        onClick={handleUpdateProfile}
+                        disabled={saving}
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
+                      >
+                        {saving ? 'Synchronisiere...' : 'Änderungen speichern'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              <h2 className="text-3xl font-black italic tracking-tighter">Security & Shield</h2>
+              <div className="bg-[#1e1f22] rounded-[40px] border border-white/[0.03] p-10 space-y-6">
+                
+                <div className="flex items-center justify-between p-6 bg-black/20 rounded-[30px] border border-white/5">
+                  <div>
+                    <p className="font-black text-white italic">Zwei-Faktor-Authentifizierung (2FA)</p>
+                    <p className="text-xs text-gray-500 mt-1 font-medium">Sichert deinen Account vor unbefugtem Zugriff.</p>
+                  </div>
+                  <button 
+                    onClick={toggleTwoFactor}
+                    className={`w-14 h-8 rounded-full relative transition-all ${profile?.two_factor_enabled ? 'bg-green-500' : 'bg-gray-700'}`}
+                  >
+                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${profile?.two_factor_enabled ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between p-6 bg-black/20 rounded-[30px] border border-white/5">
+                  <div>
+                    <p className="font-black text-white italic">Passwort ändern</p>
+                    <p className="text-xs text-gray-500 mt-1 font-medium">Letzte Änderung: Vor 12 Tagen</p>
+                  </div>
+                  <button className="bg-white/5 hover:bg-white/10 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Anfordern</button>
                 </div>
               </div>
             </div>
+          )}
 
-            <div className="pt-16 pb-8 px-8 flex justify-between items-end gap-4">
-              <div className="min-w-0">
-                <h2 className="text-xl sm:text-2xl font-black text-white truncate">{fullName}</h2>
-                <p className="text-gray-400 text-sm">Mitglied seit: {new Date().toLocaleDateString()}</p>
-              </div>
-
-              <button className="bg-indigo-500 hover:bg-indigo-400 px-6 py-2 rounded-lg font-bold transition-all shadow-lg active:scale-95 whitespace-nowrap">
-                Edit Profile
-              </button>
-            </div>
-          </section>
-
-          {/* Details Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* MigoTag Card */}
-            <div className="bg-[#232428] p-6 rounded-xl border border-white/5 hover:border-indigo-500/30 transition-all">
-              <label className="text-[10px] uppercase tracking-widest text-gray-500 block mb-2">
-                Personal MigoTag
-              </label>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xl font-mono text-indigo-400 font-bold truncate">
-                  {profile.migo_tag ?? '----'}
-                </span>
-                <button
-                  onClick={copyTag}
-                  className="p-2 bg-white/5 rounded-lg hover:bg-indigo-500 transition-all text-gray-400 hover:text-white shrink-0"
-                  title="Tag kopieren"
-                >
-                  {copied ? '✅' : '📋'}
-                </button>
-              </div>
-            </div>
-
-            {/* Account Status Card */}
-            <div className="bg-[#232428] p-6 rounded-xl border border-white/5">
-              <label className="text-[10px] uppercase tracking-widest text-gray-500 block mb-2">
-                Account Status
-              </label>
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-white font-bold">Verifiziert & Aktiv</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Advanced Section */}
-          <section className="bg-[#2b2d31] p-6 sm:p-8 rounded-2xl border border-white/5 space-y-6">
-            <h3 className="font-bold text-lg">System-Informationen</h3>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4 p-4 bg-[#111214] rounded-xl border border-white/5">
-                <div className="min-w-0">
-                  <p className="font-semibold text-white">User ID</p>
-                  <p className="text-xs text-gray-500 font-mono break-all">{profile.id}</p>
-                </div>
-                <button className="text-xs bg-white/5 px-3 py-1 rounded hover:bg-white/10 transition-colors shrink-0">
-                  Details
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 p-4 bg-[#111214] rounded-xl border border-white/5">
-                <div className="min-w-0">
-                  <p className="font-semibold text-white">Zwei-Faktor-Authentifizierung</p>
-                  <p className="text-xs text-gray-400">
-                    Schütze deinen Account mit einer extra Ebene.
+          {activeTab === 'aura' && (
+            <div className="space-y-6">
+               <h2 className="text-3xl font-black italic tracking-tighter">Migo Aura Status</h2>
+               <div className="bg-gradient-to-br from-[#1e1f22] to-[#111214] rounded-[40px] border border-white/5 p-12 text-center">
+                  <div className="w-24 h-24 bg-indigo-500/10 rounded-full flex items-center justify-center text-4xl mx-auto mb-6 border border-indigo-500/20">
+                    {profile?.is_aura ? '✨' : '💎'}
+                  </div>
+                  <h3 className="text-2xl font-black mb-2">{profile?.is_aura ? 'Du hast die Aura!' : 'Keine Aura erkannt'}</h3>
+                  <p className="text-gray-500 text-sm max-w-sm mx-auto mb-10">
+                    {profile?.is_aura 
+                      ? 'Dein Profil strahlt. Du hast Zugriff auf alle Elite-Features und The Vault.' 
+                      : 'Schalte die Aura frei, um exklusive Badges, höhere Qualität und verschlüsselten Speicher zu erhalten.'}
                   </p>
-                </div>
-
-                <div className="w-12 h-6 bg-gray-700 rounded-full relative cursor-pointer group shrink-0">
-                  <div className="absolute left-1 top-1 w-4 h-4 bg-gray-400 rounded-full group-hover:translate-x-6 transition-all" />
-                </div>
-              </div>
+                  {!profile?.is_aura && (
+                    <button 
+                      onClick={() => router.push('/?view=aura')}
+                      className="bg-indigo-600 hover:bg-indigo-500 px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all"
+                    >
+                      Aura erwerben
+                    </button>
+                  )}
+               </div>
             </div>
-          </section>
+          )}
+
         </main>
       </div>
     </div>
