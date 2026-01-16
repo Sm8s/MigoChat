@@ -8,7 +8,7 @@ import Sidebar from '@/components/Sidebar';
 import FriendsList from '@/components/FriendsList';
 import AddFriendModal from '@/components/AddFriendModal';
 
-// Einfaches Interface für die Session-Daten
+// Definition eines Interfaces für bessere Typensicherheit
 interface UserSession {
   user: {
     id: string;
@@ -23,7 +23,7 @@ export default function ChatPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const router = useRouter();
 
-  // Stabiles Status-Update (verhindert unnötige Re-Renders)
+  // Status-Update Funktion (verhindert Fehler durch fehlende IDs)
   const handleStatusUpdate = useCallback(async (userId: string, status: 'online' | 'offline') => {
     if (!userId) return;
     try {
@@ -47,13 +47,13 @@ export default function ChatPage() {
       if (mounted) {
         setSession(currentSession as UserSession);
         setLoading(false);
+        // User beim Einloggen online setzen
         await handleStatusUpdate(currentSession.user.id, 'online');
       }
     };
 
     getSession();
 
-    // Event-Listener für das Schließen des Tabs (Offline-Status)
     const handleTabClose = () => {
       if (session?.user?.id) {
         handleStatusUpdate(session.user.id, 'offline');
@@ -68,11 +68,11 @@ export default function ChatPage() {
     };
   }, [router, handleStatusUpdate, session?.user?.id]);
 
-  // Ladebildschirm für Vercel-Prerendering
+  // WICHTIG: Verhindert Prerendering-Fehler auf Vercel
   if (loading) {
     return (
       <div className="h-screen bg-[#1e1f22] flex flex-col items-center justify-center text-white">
-        <div className="animate-pulse text-2xl font-black tracking-tighter mb-4 italic uppercase">MigoChat</div>
+        <div className="animate-pulse text-2xl font-black tracking-tighter mb-4 italic uppercase">MIGOCHAT</div>
         <div className="w-48 h-1 bg-gray-800 rounded-full overflow-hidden">
           <div className="bg-indigo-500 h-full animate-progress shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>
         </div>
@@ -80,12 +80,12 @@ export default function ChatPage() {
     );
   }
   
-  // Falls keine Session vorhanden ist, rendern wir nichts (Redirect erfolgt im useEffect)
+  // Rendert erst, wenn die Session sicher existiert
   if (!session?.user?.id) return null;
 
   return (
     <div className="flex h-screen bg-[#313338] overflow-hidden font-sans select-none text-rendering-optimizeLegibility">
-      {/* Sidebar erhält die ID */}
+      {/* Übergabe der ID an Sidebar */}
       <Sidebar currentUserId={session.user.id} />
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -163,16 +163,11 @@ export default function ChatPage() {
               </button>
             </div>
             <div className="p-6">
+              {/* Prop-Korrektur: currentUserId statt session direkt */}
               <AddFriendModal 
                 currentUserId={session.user.id} 
                 onSuccess={() => setShowAddModal(false)} 
               />
-              <div className="mt-6 p-4 bg-[#1e1f22] rounded-lg border border-gray-800">
-                <h4 className="text-white text-[10px] font-bold uppercase mb-2 text-indigo-400">Pro-Tipp</h4>
-                <p className="text-[11px] text-gray-400 italic">
-                  Suche nach dem exakten MigoTag (z.B. user#0001).
-                </p>
-              </div>
             </div>
           </div>
         </div>
