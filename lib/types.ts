@@ -22,6 +22,64 @@ export interface Profile {
   updated_at: string;
 }
 
+// Poll definitions
+// Represents a poll attached to a post
+export interface Poll {
+  id: UUID;
+  post_id: UUID;
+  question: string;
+  created_at: string;
+  expires_at: string | null;
+}
+
+// Options available on a poll
+export interface PollOption {
+  id: UUID;
+  poll_id: UUID;
+  option_text: string;
+}
+
+// A vote on a poll by a user
+export interface PollVote {
+  poll_id: UUID;
+  option_id: UUID;
+  user_id: UUID;
+  created_at: string;
+}
+
+// Event scheduling
+export interface Event {
+  id: UUID;
+  creator_id: UUID;
+  title: string;
+  description: string | null;
+  event_time: string;
+  location: string | null;
+  created_at: string;
+}
+
+// Achievements that a user can earn
+export interface Achievement {
+  id: UUID;
+  user_id: UUID;
+  name: string;
+  description: string;
+  created_at: string;
+}
+
+// Group profile for group chats
+export interface GroupProfile {
+  id: UUID;
+  title: string;
+  created_at: string;
+}
+
+// Friend suggestion entry
+export interface FriendSuggestion {
+  user_id: UUID;
+  suggested_id: UUID;
+}
+
 // Friendship relationship. A single row represents the relationship between two users.
 export interface Friendship {
   id: UUID;

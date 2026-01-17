@@ -102,6 +102,26 @@ export default function Sidebar({
           <button onClick={() => go('/stories')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
             Stories
           </button>
+        {/* Groups */}
+        <button onClick={() => go('/groups')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+          Groups
+        </button>
+        {/* Polls */}
+        <button onClick={() => go('/polls')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+          Polls
+        </button>
+        {/* Events */}
+        <button onClick={() => go('/events')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+          Events
+        </button>
+        {/* Achievements */}
+        <button onClick={() => go('/achievements')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+          Achievements
+        </button>
+        {/* Suggestions */}
+        <button onClick={() => go('/suggestions')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+          Suggestions
+        </button>
           {/* Messages */}
           <button onClick={() => go('/messages')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
             Nachrichten

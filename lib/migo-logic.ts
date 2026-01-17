@@ -1,5 +1,15 @@
 import { supabase } from '@/app/supabaseClient';
-import { Profile, Friendship } from './types';
+import {
+  Profile,
+  Friendship,
+  Poll,
+  PollOption,
+  PollVote,
+  Event,
+  Achievement,
+  GroupProfile,
+  FriendSuggestion,
+} from './types';
 
 /**
  * Suche nach Profilen anhand eines Suchbegriffs.
@@ -566,4 +576,241 @@ export const removeFromCollection = async (
     .eq('post_id', postId);
   if (error) throw error;
   return true;
+};
+
+/**
+ * Creates a new group conversation. Only the creator will be added initially.
+ */
+export const createGroupConversation = async (
+  creatorId: string,
+  title: string
+): Promise<string> => {
+  const { data: convData, error: convErr } = await supabase
+    .from('conversations')
+    .insert({ type: 'group', title, created_by: creatorId })
+    .select('id')
+    .single();
+  if (convErr || !convData) throw convErr;
+  const convId = convData.id as string;
+  const { error: memErr } = await supabase
+    .from('conversation_members')
+    .insert({ conversation_id: convId, user_id: creatorId });
+  if (memErr) throw memErr;
+  return convId;
+};
+
+/**
+ * Fetches all group conversations the user is a member of.
+ */
+export const fetchGroupConversations = async (
+  userId: string
+): Promise<GroupProfile[]> => {
+  const { data, error } = await supabase
+    .from('conversation_members')
+    .select(`conversation_id, conversations!inner(id, title, created_at)`)
+    .eq('user_id', userId)
+    .eq('conversations.type', 'group');
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    id: row.conversation_id,
+    title: row.conversations.title,
+    created_at: row.conversations.created_at,
+  })) as GroupProfile[];
+};
+
+/**
+ * Creates a poll with options and returns the poll ID.
+ */
+export const createPoll = async (
+  postId: string,
+  question: string,
+  options: string[]
+): Promise<string> => {
+  const { data: pollData, error: pollErr } = await supabase
+    .from('polls')
+    .insert({ post_id: postId, question })
+    .select('id')
+    .single();
+  if (pollErr || !pollData) throw pollErr;
+  const pollId = pollData.id as string;
+  const optionRows = options.map((text) => ({ poll_id: pollId, option_text: text }));
+  const { error: optErr } = await supabase.from('poll_options').insert(optionRows);
+  if (optErr) throw optErr;
+  return pollId;
+};
+
+/**
+ * Fetches a poll with its options and vote counts.
+ */
+export const fetchPoll = async (pollId: string) => {
+  const { data: poll, error: pollErr } = await supabase
+    .from('polls')
+    .select('*')
+    .eq('id', pollId)
+    .single();
+  if (pollErr || !poll) throw pollErr;
+  const { data: options, error: optErr } = await supabase
+    .from('poll_options')
+    .select(
+      'id, option_text, poll_votes:poll_votes(count)'
+    )
+    .eq('poll_id', pollId);
+  if (optErr) throw optErr;
+  return { poll, options };
+};
+
+/**
+ * Casts or changes a vote on a poll. If the user has already voted,
+ * their vote will be updated to the new option.
+ */
+export const votePoll = async (
+  pollId: string,
+  optionId: string,
+  userId: string
+): Promise<void> => {
+  const { error } = await supabase
+    .from('poll_votes')
+    .upsert({ poll_id: pollId, option_id: optionId, user_id: userId });
+  if (error) throw error;
+};
+
+/**
+ * Creates an event and returns its ID.
+ */
+export const createEvent = async (
+  creatorId: string,
+  title: string,
+  description: string,
+  eventTime: string,
+  location: string
+): Promise<string> => {
+  const { data, error } = await supabase
+    .from('events')
+    .insert({
+      creator_id: creatorId,
+      title,
+      description,
+      event_time: eventTime,
+      location,
+    })
+    .select('id')
+    .single();
+  if (error || !data) throw error;
+  return data.id as string;
+};
+
+/**
+ * RSVPs for an event. Toggles attendance.
+ */
+export const rsvpEvent = async (
+  eventId: string,
+  userId: string
+): Promise<{ attending: boolean }> => {
+  const { data, error } = await supabase
+    .from('event_attendees')
+    .select('event_id')
+    .eq('event_id', eventId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) {
+    const { error: delErr } = await supabase
+      .from('event_attendees')
+      .delete()
+      .eq('event_id', eventId)
+      .eq('user_id', userId);
+    if (delErr) throw delErr;
+    return { attending: false };
+  } else {
+    const { error: insErr } = await supabase
+      .from('event_attendees')
+      .insert({ event_id: eventId, user_id: userId });
+    if (insErr) throw insErr;
+    return { attending: true };
+  }
+};
+
+/**
+ * Fetches upcoming events.
+ */
+export const fetchEvents = async (): Promise<Event[]> => {
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .order('event_time', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as unknown as Event[];
+};
+
+/**
+ * Awards an achievement to a user.
+ */
+export const awardAchievement = async (
+  userId: string,
+  name: string,
+  description: string
+): Promise<void> => {
+  const { error } = await supabase
+    .from('achievements')
+    .insert({ user_id: userId, name, description });
+  if (error) throw error;
+};
+
+/**
+ * Fetches achievements for a user.
+ */
+export const fetchAchievements = async (
+  userId: string
+): Promise<Achievement[]> => {
+  const { data, error } = await supabase
+    .from('achievements')
+    .select('*')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []) as unknown as Achievement[];
+};
+
+/**
+ * Fetches friend suggestions for the user.
+ */
+export const fetchFriendSuggestions = async (
+  userId: string
+): Promise<Profile[]> => {
+  const { data, error } = await supabase
+    .from('friend_suggestions')
+    .select(
+      `suggested_id, profiles!suggested_id(id, username, migo_tag, avatar_url, presence, custom_status)`
+    )
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []).map((row: any) => row.profiles) as Profile[];
+};
+
+/**
+ * Sends a message with an attachment. Store media URL and file info.
+ */
+export const sendMessageWithAttachment = async (
+  conversationId: string,
+  authorId: string,
+  content: string,
+  mediaUrl: string,
+  mediaType: string,
+  fileName: string,
+  fileSize: number
+): Promise<void> => {
+  const { error } = await supabase.from('messages').insert({
+    conversation_id: conversationId,
+    author_id: authorId,
+    content,
+    kind:
+      mediaType === 'audio'
+        ? 'audio'
+        : mediaType === 'file'
+        ? 'file'
+        : 'text',
+    media_url: mediaUrl,
+    file_name: fileName,
+    file_size: fileSize,
+  });
+  if (error) throw error;
 };
