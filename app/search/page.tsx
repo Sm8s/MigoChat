@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/app/supabaseClient';
 import {
@@ -12,8 +13,10 @@ import {
   followUser,
   unfollowUser,
   getOrCreateDirectConversation,
+  searchPosts,
+  searchCollections,
 } from '@/lib/migo-logic';
-import type { Profile } from '@/lib/types';
+import type { Profile, Post, Collection } from '@/lib/types';
 
 interface UserSession {
   user: { id: string };
@@ -25,6 +28,8 @@ export default function SearchPage() {
   const [loadingSession, setLoadingSession] = useState(true);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Profile[]>([]);
+  const [postResults, setPostResults] = useState<Post[]>([]);
+  const [collectionResults, setCollectionResults] = useState<Collection[]>([]);
   const [friendsMap, setFriendsMap] = useState<Record<string, boolean>>({});
   const [followMap, setFollowMap] = useState<Record<string, boolean>>({});
   const [searching, setSearching] = useState(false);
@@ -65,6 +70,20 @@ export default function SearchPage() {
         }
       }
       setFollowMap(followStatus);
+
+      // search posts and collections
+      try {
+        const posts = await searchPosts(query, 0, 10);
+        setPostResults(posts);
+      } catch {
+        setPostResults([]);
+      }
+      try {
+        const collections = await searchCollections(session.user.id, query, 0, 10);
+        setCollectionResults(collections);
+      } catch {
+        setCollectionResults([]);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -186,6 +205,40 @@ export default function SearchPage() {
             </div>
           );
         })}
+
+        {/* Posts Results */}
+        {postResults.length > 0 && (
+          <div className="space-y-4 mt-8">
+            <h2 className="text-lg font-black tracking-tight italic text-white">Posts</h2>
+            {postResults.map((post) => (
+              <Link
+                key={post.id}
+                href={`/post/${post.id}`}
+                className="block bg-[#1e1f22] p-4 rounded-2xl border border-white/[0.05] hover:bg-[#2b2d31]"
+              >
+                <p className="text-sm text-white line-clamp-3 whitespace-pre-line mb-2">{post.content}</p>
+                <p className="text-xs text-gray-500">{new Date(post.created_at).toLocaleString()}</p>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* Collections Results */}
+        {collectionResults.length > 0 && (
+          <div className="space-y-4 mt-8">
+            <h2 className="text-lg font-black tracking-tight italic text-white">Collections</h2>
+            {collectionResults.map((col) => (
+              <Link
+                key={col.id}
+                href={`/collections/${col.id}`}
+                className="block bg-[#1e1f22] p-4 rounded-2xl border border-white/[0.05] hover:bg-[#2b2d31]"
+              >
+                <p className="text-sm text-white truncate mb-1">{col.name}</p>
+                <p className="text-xs text-gray-500">Aktualisiert: {new Date(col.updated_at ?? col.created_at).toLocaleString()}</p>
+              </Link>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );

@@ -9,6 +9,10 @@ import {
   Achievement,
   GroupProfile,
   FriendSuggestion,
+  MessageRequest,
+  NotificationPreference,
+  Post,
+  Collection,
 } from './types';
 
 /**
@@ -813,4 +817,382 @@ export const sendMessageWithAttachment = async (
     file_size: fileSize,
   });
   if (error) throw error;
+};
+
+/**
+ * Blocks a user by inserting a row into the `blocks` table. Blocking is symmetric
+ * – once a block exists between two users, they can no longer interact via chat,
+ * follow, or see each other in search and feeds. If the block already exists,
+ * this call will simply return true.
+ */
+export const blockUser = async (
+  blockerId: string,
+  blockedId: string
+): Promise<boolean> => {
+  if (blockerId === blockedId) return false;
+  // check if block exists
+  const { data, error } = await supabase
+    .from('blocks')
+    .select('blocker_id')
+    .or(
+      `blocker_id.eq.${blockerId},blocker_id.eq.${blockedId}`
+    )
+    .or(
+      `blocked_id.eq.${blockedId},blocked_id.eq.${blockerId}`
+    )
+    .maybeSingle();
+  if (error) throw error;
+  if (data) return true;
+  const { error: insErr } = await supabase.from('blocks').insert({
+    blocker_id: blockerId,
+    blocked_id: blockedId,
+  });
+  if (insErr) throw insErr;
+  return true;
+};
+
+/**
+ * Unblocks a user by removing the row from the `blocks` table.
+ */
+export const unblockUser = async (
+  blockerId: string,
+  blockedId: string
+): Promise<boolean> => {
+  const { error } = await supabase
+    .from('blocks')
+    .delete()
+    .or(
+      `blocker_id.eq.${blockerId},blocker_id.eq.${blockedId}`
+    )
+    .or(
+      `blocked_id.eq.${blockedId},blocked_id.eq.${blockerId}`
+    );
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Sends a message request from requester to recipient. If a friendship already
+ * exists, this will throw. Returns a user-friendly message.
+ */
+export const sendMessageRequest = async (
+  requesterId: string,
+  recipientId: string
+): Promise<{ ok: boolean; message: string }> => {
+  if (requesterId === recipientId) {
+    return { ok: false, message: 'Du kannst dir selbst keine Anfrage senden.' };
+  }
+  // Check for existing friendship
+  const { data: friendRow, error: friendErr } = await supabase
+    .from('friendships')
+    .select('status, user_low, user_high')
+    .or(`user_low.eq.${requesterId},user_high.eq.${requesterId}`)
+    .or(`user_low.eq.${recipientId},user_high.eq.${recipientId}`);
+  if (friendErr) throw friendErr;
+  const alreadyFriend = (friendRow ?? []).some((row: any) => {
+    return (
+      ((row.user_low === requesterId && row.user_high === recipientId) ||
+        (row.user_low === recipientId && row.user_high === requesterId)) &&
+      row.status === 'accepted'
+    );
+  });
+  if (alreadyFriend) {
+    return { ok: false, message: 'Ihr seid bereits befreundet.' };
+  }
+  // Insert request; if duplicate exists, error
+  const { error } = await supabase.from('message_requests').insert({
+    requester_id: requesterId,
+    recipient_id: recipientId,
+    status: 'pending',
+  });
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+  return { ok: true, message: 'Nachrichtenanfrage gesendet.' };
+};
+
+/**
+ * Responds to a message request. On acceptance, optionally create a DM and set
+ * conversation_id. On rejection, just update status. Returns true on success.
+ */
+export const respondMessageRequest = async (
+  requestId: string,
+  newStatus: 'accepted' | 'rejected'
+): Promise<boolean> => {
+  // Fetch the request
+  const { data: reqRow, error: reqErr } = await supabase
+    .from('message_requests')
+    .select('id, requester_id, recipient_id, status')
+    .eq('id', requestId)
+    .maybeSingle();
+  if (reqErr) throw reqErr;
+  if (!reqRow) throw new Error('Anfrage nicht gefunden');
+  if (reqRow.status !== 'pending') {
+    throw new Error('Anfrage wurde bereits beantwortet');
+  }
+  let conversationId: string | null = null;
+  if (newStatus === 'accepted') {
+    // Create DM using RPC
+    const { data: convData, error: convErr } = await supabase.rpc(
+      'get_or_create_dm',
+      { other_id: reqRow.requester_id }
+    );
+    if (convErr) throw convErr;
+    conversationId = convData as string;
+  }
+  const { error: updErr } = await supabase
+    .from('message_requests')
+    .update({ status: newStatus, conversation_id: conversationId, updated_at: new Date().toISOString() })
+    .eq('id', requestId);
+  if (updErr) throw updErr;
+  return true;
+};
+
+/**
+ * Fetches all message requests for a user. inbound = received, outbound = sent.
+ */
+export const fetchMessageRequests = async (
+  currentUserId: string
+): Promise<{ inbound: MessageRequest[]; outbound: MessageRequest[] }> => {
+  const { data, error } = await supabase
+    .from('message_requests')
+    .select('*')
+    .or(`requester_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  const inbound: MessageRequest[] = [];
+  const outbound: MessageRequest[] = [];
+  (data ?? []).forEach((req: any) => {
+    if (req.recipient_id === currentUserId) inbound.push(req as MessageRequest);
+    else outbound.push(req as MessageRequest);
+  });
+  return { inbound, outbound };
+};
+
+/**
+ * Edits the content of a message. Only the author may edit their own messages.
+ */
+export const editMessage = async (
+  messageId: string,
+  newContent: string
+): Promise<boolean> => {
+  const { error } = await supabase
+    .from('messages')
+    .update({ content: newContent, edited_at: new Date().toISOString() })
+    .eq('id', messageId);
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Soft-deletes a message by setting deleted_at. Only the author may delete.
+ */
+export const deleteMessage = async (messageId: string): Promise<boolean> => {
+  const { error } = await supabase
+    .from('messages')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', messageId);
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Updates the content of a post and sets the updated_at timestamp. Only the author
+ * may update their post.
+ */
+export const updatePostContent = async (
+  postId: string,
+  newContent: string
+): Promise<boolean> => {
+  const { error } = await supabase
+    .from('posts')
+    .update({ content: newContent, updated_at: new Date().toISOString() })
+    .eq('id', postId);
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Soft-deletes a post by setting deleted_at. Only the author may delete.
+ */
+export const deletePost = async (postId: string): Promise<boolean> => {
+  const { error } = await supabase
+    .from('posts')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', postId);
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Marks all notifications for the user as read.
+ */
+export const markAllNotificationsRead = async (
+  currentUserId: string
+): Promise<void> => {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('user_id', currentUserId)
+    .is('read_at', null);
+  if (error) throw error;
+};
+
+/**
+ * Fetches or creates the notification preferences row for a user.
+ */
+export const fetchNotificationPreferences = async (
+  userId: string
+): Promise<NotificationPreference> => {
+  const { data, error } = await supabase
+    .from('notification_preferences')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) return data as NotificationPreference;
+  // insert defaults
+  const defaults = {
+    user_id: userId,
+    notify_follow: true,
+    notify_friend_request: true,
+    notify_friend_accept: true,
+    notify_post_like: true,
+    notify_post_comment: true,
+    notify_message: true,
+    digest_enabled: false,
+    digest_frequency: 'daily',
+    digest_time_utc: '09:00:00',
+  };
+  const { error: insErr } = await supabase
+    .from('notification_preferences')
+    .insert(defaults);
+  if (insErr) throw insErr;
+  return defaults as NotificationPreference;
+};
+
+/**
+ * Updates a user's notification preferences. Only the owner may update their prefs.
+ */
+export const updateNotificationPreferences = async (
+  userId: string,
+  prefs: Partial<NotificationPreference>
+): Promise<void> => {
+  const { error } = await supabase
+    .from('notification_preferences')
+    .update({ ...prefs, updated_at: new Date().toISOString() })
+    .eq('user_id', userId);
+  if (error) throw error;
+};
+
+/**
+ * Searches posts by content. Returns posts plus author profiles, skipping deleted
+ * posts and applying RLS for visibility.
+ */
+export const searchPosts = async (
+  query: string,
+  skip: number = 0,
+  limit: number = 10
+): Promise<Post[]> => {
+  const term = query.trim();
+  if (!term) return [];
+  const { data, error } = await supabase
+    .from('posts')
+    .select(
+      `id, author_id, content, visibility, created_at, updated_at, deleted_at,
+      author:profiles(id, username, migo_tag, avatar_url, presence)`
+    )
+    .ilike('content', `%${term}%`)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .range(skip, skip + limit - 1);
+  if (error) throw error;
+  return (data ?? []) as unknown as Post[];
+};
+
+/**
+ * Searches collections by name for the current user.
+ */
+export const searchCollections = async (
+  userId: string,
+  query: string,
+  skip: number = 0,
+  limit: number = 10
+): Promise<Collection[]> => {
+  const term = query.trim();
+  if (!term) return [];
+  const { data, error } = await supabase
+    .from('collections')
+    .select('*')
+    .eq('user_id', userId)
+    .ilike('name', `%${term}%`)
+    .order('updated_at', { ascending: false })
+    .range(skip, skip + limit - 1);
+  if (error) throw error;
+  return (data ?? []) as unknown as Collection[];
+};
+
+/**
+ * Fetches a profile by username. Returns null if not found.
+ */
+export const fetchProfileByUsername = async (username: string): Promise<Profile | null> => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, username, migo_tag, display_name, avatar_url, header_url, presence, bio')
+    .eq('username', username)
+    .maybeSingle();
+  if (error) throw error;
+  return data ?? null;
+};
+
+/**
+ * Fetches posts authored by a specific user, ordered by newest first.
+ */
+export const fetchPostsByUser = async (
+  userId: string,
+  skip: number = 0,
+  limit: number = 10
+): Promise<Post[]> => {
+  const { data, error } = await supabase
+    .from('posts')
+    .select(
+      `id, author_id, content, visibility, created_at, updated_at, deleted_at,
+      author:profiles(id, username, migo_tag, avatar_url, presence)`
+    )
+    .eq('author_id', userId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .range(skip, skip + limit - 1);
+  if (error) throw error;
+  return (data ?? []) as unknown as Post[];
+};
+
+/**
+ * Fetches a subset of comments for a given post.
+ */
+export const fetchCommentsForPost = async (
+  postId: string,
+  skip: number = 0,
+  limit: number = 10
+): Promise<
+  {
+    id: string;
+    author_id: string;
+    content: string;
+    created_at: string;
+    deleted_at: string | null;
+    author: { id: string; username: string | null; migo_tag: string | null; avatar_url: string | null };
+  }[]
+> => {
+  const { data, error } = await supabase
+    .from('comments')
+    .select(
+      `id, author_id, content, created_at, deleted_at,
+       author:profiles(id, username, migo_tag, avatar_url)`
+    )
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true })
+    .range(skip, skip + limit - 1);
+  if (error) throw error;
+  return (data ?? []) as any;
 };

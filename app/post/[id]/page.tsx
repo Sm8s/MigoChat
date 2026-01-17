@@ -9,6 +9,7 @@ import {
   addComment,
   deleteComment,
   toggleLikePost,
+  fetchCommentsForPost,
 } from '@/lib/migo-logic';
 
 interface UserSession {
@@ -24,6 +25,13 @@ export default function PostDetailPage() {
   const [post, setPost] = useState<any | null>(null);
   const [newComment, setNewComment] = useState('');
   const [loadingPost, setLoadingPost] = useState(false);
+
+  // Comments pagination state
+  const [comments, setComments] = useState<any[]>([]);
+  const [commentsSkip, setCommentsSkip] = useState(0);
+  const COMMENTS_PER_PAGE = 10;
+  const [commentsHasMore, setCommentsHasMore] = useState(true);
+  const [loadingComments, setLoadingComments] = useState(false);
 
   useEffect(() => {
     const getSession = async () => {
@@ -54,6 +62,45 @@ export default function PostDetailPage() {
     loadPost();
   }, [postId]);
 
+  // Load comments in pages
+  const loadComments = async (initial: boolean = false) => {
+    if (!postId) return;
+    if (loadingComments) return;
+    setLoadingComments(true);
+    try {
+      let skip = commentsSkip;
+      if (initial) {
+        skip = 0;
+      }
+      const data = await fetchCommentsForPost(postId as string, skip, COMMENTS_PER_PAGE);
+      if (initial) {
+        setComments(data);
+      } else {
+        setComments((prev) => [...prev, ...data]);
+      }
+      if (data.length < COMMENTS_PER_PAGE) {
+        setCommentsHasMore(false);
+      } else {
+        setCommentsSkip(skip + data.length);
+        setCommentsHasMore(true);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  // load initial comments when postId changes
+  useEffect(() => {
+    if (postId) {
+      setComments([]);
+      setCommentsSkip(0);
+      setCommentsHasMore(true);
+      loadComments(true);
+    }
+  }, [postId]);
+
   const handleAddComment = async () => {
     if (!session || !postId) return;
     const text = newComment.trim();
@@ -61,9 +108,11 @@ export default function PostDetailPage() {
     try {
       await addComment(postId as string, session.user.id, text);
       setNewComment('');
-      // reload post to show new comment
-      const data = await fetchPostWithComments(postId as string);
-      setPost(data);
+      // reload comments
+      setComments([]);
+      setCommentsSkip(0);
+      setCommentsHasMore(true);
+      await loadComments(true);
     } catch (err) {
       console.error(err);
     }
@@ -72,8 +121,11 @@ export default function PostDetailPage() {
   const handleDeleteComment = async (commentId: string) => {
     try {
       await deleteComment(commentId);
-      const data = await fetchPostWithComments(postId as string);
-      setPost(data);
+      // reload comments
+      setComments([]);
+      setCommentsSkip(0);
+      setCommentsHasMore(true);
+      await loadComments(true);
     } catch (err) {
       console.error(err);
     }
@@ -128,30 +180,39 @@ export default function PostDetailPage() {
         {/* Comments */}
         <div className="bg-[#1e1f22] p-6 rounded-3xl border border-white/[0.05] space-y-4">
           <h3 className="text-lg font-bold text-white">Kommentare</h3>
-          {post.comments && post.comments.length > 0 ? (
-            post.comments.map((c: any) => {
+          {comments.length > 0 ? (
+            comments.map((c: any) => {
               const isMine = c.author_id === session!.user.id;
               return (
                 <div key={c.id} className="bg-[#2b2d31] p-3 rounded-2xl flex items-start gap-3">
                   <div className="w-8 h-8 rounded-full bg-[#4e5058] flex items-center justify-center text-white font-bold">
                     {c.author?.username?.[0]?.toUpperCase() ?? '?'}
                   </div>
-                    <div className="flex-1">
-                      <span className="text-sm font-bold text-white">
-                        {c.author?.username ?? 'Unbekannt'}{c.author?.migo_tag ? <span className="text-gray-400">#{c.author.migo_tag}</span> : null}
-                      </span>
-                      <p className="text-sm text-gray-300 whitespace-pre-wrap">{c.content}</p>
-                      <span className="text-[10px] text-gray-500">{new Date(c.created_at).toLocaleString()}</span>
-                    </div>
-                    {isMine && (
-                      <button onClick={() => handleDeleteComment(c.id)} className="text-red-400 hover:text-red-200 text-xs">Löschen</button>
-                    )}
+                  <div className="flex-1">
+                    <span className="text-sm font-bold text-white">
+                      {c.author?.username ?? 'Unbekannt'}{c.author?.migo_tag ? <span className="text-gray-400">#{c.author.migo_tag}</span> : null}
+                    </span>
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap">{c.content}</p>
+                    <span className="text-[10px] text-gray-500">{new Date(c.created_at).toLocaleString()}</span>
+                  </div>
+                  {isMine && (
+                    <button onClick={() => handleDeleteComment(c.id)} className="text-red-400 hover:text-red-200 text-xs">Löschen</button>
+                  )}
                 </div>
               );
             })
           ) : (
             <p className="text-gray-500 text-sm">Keine Kommentare</p>
           )}
+          {commentsHasMore && !loadingComments && (
+            <button
+              onClick={() => loadComments(false)}
+              className="mx-auto mt-4 bg-[#1e1f22] hover:bg-[#2b2d31] text-white px-4 py-2 rounded-2xl text-xs font-bold"
+            >
+              Weitere laden
+            </button>
+          )}
+          {loadingComments && <p className="text-gray-500 text-xs mt-2">Lädt weitere Kommentare...</p>}
           {/* Add comment */}
           <div className="flex gap-2 mt-4">
             <input

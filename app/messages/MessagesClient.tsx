@@ -4,7 +4,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/app/supabaseClient';
-import { getOrCreateDirectConversation } from '@/lib/migo-logic';
+import { getOrCreateDirectConversation, sendMessageWithAttachment } from '@/lib/migo-logic';
 
 interface UserSession {
   user: { id: string };
@@ -21,6 +21,11 @@ interface ChatMessage {
   content: string;
   created_at: string;
   author: { id: string; username: string | null; migo_tag: string | null } | null;
+
+  // extended fields for attachments
+  kind?: string;
+  media_url?: string | null;
+  file_name?: string | null;
 }
 
 export default function MessagesClient() {
@@ -32,6 +37,7 @@ export default function MessagesClient() {
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [loadingConvs, setLoadingConvs] = useState(false);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
 
@@ -113,7 +119,7 @@ export default function MessagesClient() {
       try {
         const { data, error } = await supabase
           .from('messages')
-          .select('id, author_id, content, created_at, author:profiles(id, username, migo_tag)')
+          .select('id, author_id, content, created_at, kind, media_url, file_name, author:profiles(id, username, migo_tag)')
           .eq('conversation_id', convId)
           .order('created_at', { ascending: true });
         if (error) throw error;
@@ -142,14 +148,22 @@ export default function MessagesClient() {
   const handleSend = async () => {
     if (!session || !selectedConvId) return;
     const text = newMessage.trim();
-    if (!text) return;
+    // if file selected, allow sending with or without text
+    if (!text && !selectedFile) return;
     try {
-      await supabase.from('messages').insert({
-        conversation_id: selectedConvId,
-        author_id: session.user.id,
-        content: text,
-      });
+      if (selectedFile) {
+        // use attachment helper
+        await sendMessageWithAttachment(selectedConvId, session.user.id, text, selectedFile);
+        setSelectedFile(null);
+      } else {
+        await supabase.from('messages').insert({
+          conversation_id: selectedConvId,
+          author_id: session.user.id,
+          content: text,
+        });
+      }
       setNewMessage('');
+      // reload messages
       loadMessages(selectedConvId);
     } catch (err) {
       console.error(err);
@@ -254,7 +268,40 @@ export default function MessagesClient() {
                           {m.author?.migo_tag ? `#${m.author.migo_tag}` : ''}
                         </span>
                       )}
-                      <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                      {/* Message content */}
+                      {m.kind && m.kind !== 'text' && m.media_url ? (
+                        <div className="mb-2">
+                          {m.kind === 'image' && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={m.media_url}
+                              alt={m.file_name ?? 'attachment'}
+                              className="max-w-full rounded-lg mb-2"
+                            />
+                          )}
+                          {m.kind === 'video' && (
+                            <video controls src={m.media_url} className="max-w-full rounded-lg mb-2" />
+                          )}
+                          {m.kind === 'audio' && (
+                            <audio controls src={m.media_url} className="w-full mb-2" />
+                          )}
+                          {m.kind === 'file' && (
+                            <a
+                              href={m.media_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline text-indigo-300"
+                            >
+                              {m.file_name ?? 'Datei herunterladen'}
+                            </a>
+                          )}
+                          {m.content && (
+                            <p className="text-sm whitespace-pre-wrap mt-1">{m.content}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                      )}
                       <span className="text-[10px] text-gray-400">
                         {new Date(m.created_at).toLocaleTimeString()}
                       </span>
@@ -266,6 +313,29 @@ export default function MessagesClient() {
 
             {/* message input */}
             <div className="p-4 border-t border-white/[0.1] flex items-center gap-2">
+              {/* File input (hidden) */}
+              <input
+                type="file"
+                id="fileInput"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setSelectedFile(file);
+                  }
+                }}
+              />
+              {/* Attachment button */}
+              <button
+                title={selectedFile ? `Anhang: ${selectedFile.name}` : 'Datei anhängen'}
+                onClick={() => {
+                  const input = document.getElementById('fileInput') as HTMLInputElement | null;
+                  input?.click();
+                }}
+                className="bg-[#2b2d31] hover:bg-[#35373c] text-gray-400 px-2 py-2 rounded-xl text-sm"
+              >
+                📎
+              </button>
               <input
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}

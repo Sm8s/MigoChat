@@ -114,8 +114,60 @@ export interface Message {
   author_id: UUID;
   content: string;
   created_at: string;
+  /**
+   * Timestamp when the message was last edited. Null if never edited.
+   */
   edited_at: string | null;
+  /**
+   * Timestamp when the message was soft-deleted. A non-null value means the message
+   * should not be rendered, but remains in the database for audit purposes.
+   */
   deleted_at: string | null;
+  /**
+   * Kind of message. text for normal messages, audio for voice notes,
+   * file for arbitrary attachments. Clients should use this to decide how to render
+   * the message content. See migrations for supported values.
+   */
+  kind?: 'text' | 'audio' | 'file';
+  /**
+   * If kind !== 'text', this holds a URL to the uploaded media in Supabase Storage.
+   */
+  media_url?: string | null;
+  /**
+   * Original filename of an uploaded attachment.
+   */
+  file_name?: string | null;
+  /**
+   * Size of an uploaded attachment in bytes.
+   */
+  file_size?: number | null;
+}
+
+// A request to open a conversation with a user you are not yet friends with.
+export interface MessageRequest {
+  id: UUID;
+  requester_id: UUID;
+  recipient_id: UUID;
+  status: 'pending' | 'accepted' | 'rejected';
+  conversation_id: UUID | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Preferences controlling which types of notifications a user wants to receive and
+// whether they want a periodic digest. These map to the notification_preferences table.
+export interface NotificationPreference {
+  user_id: UUID;
+  notify_follow: boolean;
+  notify_friend_request: boolean;
+  notify_friend_accept: boolean;
+  notify_post_like: boolean;
+  notify_post_comment: boolean;
+  notify_message: boolean;
+  digest_enabled: boolean;
+  digest_frequency: string; // e.g. 'daily' or 'weekly'
+  digest_time_utc: string; // HH:MM:SS
+  updated_at: string;
 }
 
 export type PostVisibility = 'public' | 'followers' | 'friends' | 'private';

@@ -32,17 +32,37 @@ export default function ChatPage() {
 
   useEffect(() => {
     let mounted = true;
-    const getSession = async () => {
+    const getSessionAndProfile = async () => {
       const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-      if (error || !currentSession) { router.push('/login'); return; }
+      if (error || !currentSession) {
+        router.push('/login');
+        return;
+      }
+      // fetch profile to check if onboarding completed
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('username, display_name')
+        .eq('id', currentSession.user.id)
+        .maybeSingle();
+      if (profileError) {
+        router.push('/login');
+        return;
+      }
+      // If missing username or display_name -> redirect to onboarding
+      if (!profileData?.username || !profileData?.display_name) {
+        router.push('/onboarding');
+        return;
+      }
       if (mounted) {
         setSession(currentSession as UserSession);
         setLoading(false);
         await handleStatusUpdate(currentSession.user.id, 'online');
       }
     };
-    getSession();
-    return () => { mounted = false; };
+    getSessionAndProfile();
+    return () => {
+      mounted = false;
+    };
   }, [router, handleStatusUpdate]);
 
   if (loading) return (

@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/app/supabaseClient';
-import { fetchNotifications, markNotificationRead } from '@/lib/migo-logic';
+import { fetchNotifications, markNotificationRead, markAllNotificationsRead } from '@/lib/migo-logic';
 
 interface NotificationItem {
   id: string;
@@ -91,8 +91,23 @@ export default function NotificationsPage() {
 
   return (
     <div className="h-screen flex flex-col bg-[#0a0a0c] text-gray-200">
-      <header className="p-6 border-b border-white/10 bg-[#1e1f22]">
+      <header className="p-6 border-b border-white/10 bg-[#1e1f22] flex items-center justify-between">
         <h1 className="text-2xl font-black tracking-tight italic">Benachrichtigungen</h1>
+        {session && notifications.length > 0 && (
+          <button
+            onClick={async () => {
+              try {
+                await markAllNotificationsRead(session.user.id);
+                setNotifications((prev) => prev.map((n) => ({ ...n, read_at: new Date().toISOString() })));
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+            className="text-xs font-bold uppercase tracking-wider border border-white/[0.1] px-3 py-1 rounded-xl hover:bg-[#2b2d31]"
+          >
+            Alle lesen
+          </button>
+        )}
       </header>
       <main className="flex-1 overflow-y-auto p-6 space-y-4">
         {loading ? (
@@ -100,44 +115,70 @@ export default function NotificationsPage() {
         ) : notifications.length === 0 ? (
           <p className="text-center text-gray-500">Keine Benachrichtigungen</p>
         ) : (
-          notifications.map((n) => {
-            const actorName = n.actor?.username ?? 'Jemand';
-            const actorTag = n.actor?.migo_tag ? `#${n.actor.migo_tag}` : '';
-            let message = '';
-            switch (n.type) {
-              case 'follow':
+          (() => {
+            // Gruppiere Likes und Kommentare nach Post
+            const grouped: any[] = [];
+            const groupMap: Record<string, any> = {};
+            notifications.forEach((n) => {
+              if (n.type === 'post_like' || n.type === 'post_comment') {
+                const key = `${n.type}-${n.entity_id}`;
+                if (!groupMap[key]) {
+                  groupMap[key] = { ...n, count: 0, actors: [] as any[] };
+                }
+                groupMap[key].count += 1;
+                if (n.actor) groupMap[key].actors.push(n.actor);
+                // Mark read only if all grouped notifications are read
+                if (!n.read_at) groupMap[key].read_at = null;
+                // Use most recent date
+                if (!groupMap[key].latest_at || new Date(n.created_at) > new Date(groupMap[key].latest_at)) {
+                  groupMap[key].latest_at = n.created_at;
+                }
+              } else {
+                grouped.push({ ...n, count: 1, actors: n.actor ? [n.actor] : [] });
+              }
+            });
+            const combined = [...Object.values(groupMap), ...grouped];
+            // Sort by latest_at/created_at desc
+            combined.sort((a, b) => new Date(b.latest_at ?? b.created_at).getTime() - new Date(a.latest_at ?? a.created_at).getTime());
+            return combined.map((n: any) => {
+              const actorName = n.actors?.[0]?.username ?? n.actor?.username ?? 'Jemand';
+              const actorTag = n.actors?.[0]?.migo_tag ? `#${n.actors[0].migo_tag}` : n.actor?.migo_tag ? `#${n.actor.migo_tag}` : '';
+              let message = '';
+              if (n.type === 'post_like') {
+                if (n.count > 1) {
+                  message = `${n.count} Personen haben deinen Beitrag geliked`;
+                } else {
+                  message = `${actorName}${actorTag} hat deinen Beitrag geliked`;
+                }
+              } else if (n.type === 'post_comment') {
+                if (n.count > 1) {
+                  message = `${n.count} Personen haben deinen Beitrag kommentiert`;
+                } else {
+                  message = `${actorName}${actorTag} hat deinen Beitrag kommentiert`;
+                }
+              } else if (n.type === 'follow') {
                 message = `${actorName}${actorTag} folgt dir jetzt`;
-                break;
-              case 'friend_request':
+              } else if (n.type === 'friend_request') {
                 message = `${actorName}${actorTag} hat dir eine Freundschaftsanfrage gesendet`;
-                break;
-              case 'friend_accept':
+              } else if (n.type === 'friend_accept') {
                 message = `${actorName}${actorTag} hat deine Freundschaftsanfrage angenommen`;
-                break;
-              case 'post_like':
-                message = `${actorName}${actorTag} hat deinen Beitrag geliked`;
-                break;
-              case 'post_comment':
-                message = `${actorName}${actorTag} hat deinen Beitrag kommentiert`;
-                break;
-              case 'message':
+              } else if (n.type === 'message') {
                 message = `${actorName}${actorTag} hat dir eine Nachricht geschickt`;
-                break;
-              default:
+              } else {
                 message = 'Aktivität';
-                break;
-            }
-            return (
-              <div
-                key={n.id}
-                onClick={() => handleClick(n)}
-                className={`p-4 bg-[#1e1f22] border border-white/[0.05] rounded-2xl cursor-pointer hover:bg-[#2b2d31] ${n.read_at ? 'opacity-70' : ''}`}
-              >
-                <p className="text-sm font-bold text-white mb-1">{message}</p>
-                <p className="text-xs text-gray-500">{new Date(n.created_at).toLocaleString()}</p>
-              </div>
-            );
-          })
+              }
+              return (
+                <div
+                  key={n.id || `${n.type}-${n.entity_id}`}
+                  onClick={() => handleClick(n)}
+                  className={`p-4 bg-[#1e1f22] border border-white/[0.05] rounded-2xl cursor-pointer hover:bg-[#2b2d31] ${n.read_at ? 'opacity-70' : ''}`}
+                >
+                  <p className="text-sm font-bold text-white mb-1">{message}</p>
+                  <p className="text-xs text-gray-500">{new Date((n.latest_at ?? n.created_at)).toLocaleString()}</p>
+                </div>
+              );
+            });
+          })()
         )}
       </main>
     </div>

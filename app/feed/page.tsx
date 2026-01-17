@@ -130,6 +130,9 @@ export default function FeedPage() {
           </div>
         </div>
         {/* Posts List */}
+        {posts.length === 0 && !loadingPosts ? (
+          <p className="text-center text-gray-500 text-sm">Noch keine Posts. Teile als erster etwas!</p>
+        ) : null}
         {posts.map((post) => {
           const { id, content, created_at, author } = post;
           const createdDate = new Date(created_at).toLocaleString();
