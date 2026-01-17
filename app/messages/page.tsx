@@ -1,7 +1,7 @@
 // /messages page: direct messages chat
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/app/supabaseClient';
 import {
@@ -26,7 +26,7 @@ interface ChatMessage {
   author: { id: string; username: string | null; migo_tag: string | null } | null;
 }
 
-function MessagesPageClient() {
+export default function MessagesPage() {
   const router = useRouter();
   const params = useSearchParams();
   const [session, setSession] = useState<UserSession | null>(null);
@@ -270,20 +270,5 @@ function MessagesPageClient() {
         )}
       </div>
     </div>
-  );
-}
-
-// Next.js (App Router) requires `useSearchParams()` to be wrapped in a Suspense boundary.
-export default function MessagesPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-[#0a0a0c] text-white flex items-center justify-center">
-          <div className="text-sm text-white/70">Lade Nachrichten…</div>
-        </div>
-      }
-    >
-      <MessagesPageClient />
-    </Suspense>
   );
 }

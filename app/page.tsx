@@ -165,9 +165,15 @@ export default function ChatPage() {
                       <h2 className="text-4xl font-black italic tracking-tight">ULTIMATE AURA</h2>
                       <div className="space-y-5">
                         {[
-                          { t: 'Ghost Mode', d: 'Völlige Unsichtbarkeit für alle.', i: '👻' },
-                          { t: '4K Stream', d: 'Keine Pixel, nur pure Qualität.', i: '🎬' },
-                          { t: 'The Vault', d: 'Eigener, verschlüsselter Cloud-Speicher.', i: '🔐' }
+                          { t: 'Ghost Mode', d: 'Unsichtbar bleiben trotz Online-Status.', i: '👻' },
+                          { t: 'Animated Avatar', d: 'Animierter Rahmen für dein Avatar.', i: '🌟' },
+                          { t: 'Premium Themes', d: 'Gradient-Hintergründe & exklusive Farben.', i: '🎨' },
+                          { t: 'Custom Badge', d: 'Individuelle Badge-Texte.', i: '🏷️' },
+                          { t: 'Extra Reactions', d: 'Exklusive Emoji-Pakete.', i: '✨' },
+                          { t: 'Story+', d: 'Stories laufen 48h + Highlight.', i: '🕒' },
+                          { t: 'Vault Access', d: 'Privater verschlüsselter Speicher.', i: '🔐' },
+                          { t: 'Message Upgrades', d: 'Voice Notes & größere Uploads.', i: '🎤' },
+                          { t: 'Boost Credits', d: 'Monatliche Post-Boosts.', i: '🚀' },
                         ].map((feat, i) => (
                           <div key={i} className="flex items-start gap-4">
                             <span className="text-2xl">{feat.i}</span>
@@ -184,7 +190,10 @@ export default function ChatPage() {
                         <div className="text-5xl font-black mb-1 italic">€8.99</div>
                         <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Per Month</p>
                       </div>
-                      <button className="bg-white text-black px-12 py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-white/10">
+                      <button
+                        onClick={() => router.push('/aura')}
+                        className="bg-white text-black px-12 py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-white/10"
+                      >
                         Claim Your Aura
                       </button>
                     </div>

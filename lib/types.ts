@@ -87,6 +87,77 @@ export interface Comment {
   deleted_at: string | null;
 }
 
+// --- Addons Types ---
+
+// Reaction on a post with arbitrary emoji
+export interface PostReaction {
+  post_id: UUID;
+  user_id: UUID;
+  emoji: string;
+  created_at: string;
+}
+
+// Story record; expires_at indicates when it will be removed
+export interface Story {
+  id: UUID;
+  author_id: UUID;
+  content: string | null;
+  media_url: string | null;
+  media_type: 'image' | 'video' | null;
+  visibility: PostVisibility; // reuse visibilities for stories
+  created_at: string;
+  expires_at: string;
+  deleted_at: string | null;
+}
+
+export interface StoryView {
+  story_id: UUID;
+  viewer_id: UUID;
+  viewed_at: string;
+}
+
+export interface Repost {
+  post_id: UUID;
+  user_id: UUID;
+  created_at: string;
+}
+
+export interface PostBookmark {
+  post_id: UUID;
+  user_id: UUID;
+  created_at: string;
+}
+
+export interface Collection {
+  id: UUID;
+  user_id: UUID;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CollectionItem {
+  collection_id: UUID;
+  post_id: UUID;
+  added_at: string;
+}
+
+export interface MessageReaction {
+  message_id: UUID;
+  user_id: UUID;
+  emoji: string;
+  created_at: string;
+}
+
+export interface Entitlement {
+  user_id: UUID;
+  key: string;
+  value: any;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Notification {
   id: UUID;
   user_id: UUID;

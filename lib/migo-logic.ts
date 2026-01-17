@@ -354,3 +354,216 @@ export const markNotificationRead = async (notificationId: string) => {
   if (error) throw error;
   return true;
 };
+
+/**
+ * Adds or removes a reaction (emoji) for a post. Uses the
+ * `post_reactions` table introduced in the addons schema. If the user
+ * has already reacted with the same emoji, the reaction is removed.
+ */
+export const togglePostReaction = async (
+  postId: string,
+  userId: string,
+  emoji: string
+) => {
+  // Check if reaction exists
+  const { data, error } = await supabase
+    .from('post_reactions')
+    .select('post_id')
+    .eq('post_id', postId)
+    .eq('user_id', userId)
+    .eq('emoji', emoji)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) {
+    // Remove reaction
+    const { error: delErr } = await supabase
+      .from('post_reactions')
+      .delete()
+      .eq('post_id', postId)
+      .eq('user_id', userId)
+      .eq('emoji', emoji);
+    if (delErr) throw delErr;
+    return { reacted: false };
+  } else {
+    // Add reaction
+    const { error: insErr } = await supabase.from('post_reactions').insert({
+      post_id: postId,
+      user_id: userId,
+      emoji,
+    });
+    if (insErr) throw insErr;
+    return { reacted: true };
+  }
+};
+
+/**
+ * Creates a new story. If the current user has the `story_plus`
+ * entitlement, stories last 48 hours instead of 24. The optional media
+ * parameters may point to files uploaded to Supabase Storage.
+ */
+export const createStory = async (
+  authorId: string,
+  content: string,
+  mediaUrl: string | null,
+  mediaType: 'image' | 'video' | null,
+  visibility: 'public' | 'followers' | 'friends' | 'private'
+) => {
+  // Check entitlement by reading entitlements table
+  const { data: ent, error: entErr } = await supabase
+    .from('entitlements')
+    .select('key')
+    .eq('user_id', authorId)
+    .eq('key', 'story_plus')
+    .maybeSingle();
+  if (entErr) throw entErr;
+  const expires = new Date();
+  expires.setHours(expires.getHours() + (ent ? 48 : 24));
+  const { error } = await supabase.from('stories').insert({
+    author_id: authorId,
+    content: content || null,
+    media_url: mediaUrl || null,
+    media_type: mediaType || null,
+    visibility,
+    expires_at: expires.toISOString(),
+  });
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Adds or removes a repost entry. If a user reposts a post they have
+ * already reposted, the repost is removed.
+ */
+export const toggleRepost = async (
+  postId: string,
+  userId: string
+) => {
+  const { data, error } = await supabase
+    .from('reposts')
+    .select('post_id')
+    .eq('post_id', postId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) {
+    const { error: delErr } = await supabase
+      .from('reposts')
+      .delete()
+      .eq('post_id', postId)
+      .eq('user_id', userId);
+    if (delErr) throw delErr;
+    return { reposted: false };
+  } else {
+    const { error: insErr } = await supabase.from('reposts').insert({
+      post_id: postId,
+      user_id: userId,
+    });
+    if (insErr) throw insErr;
+    return { reposted: true };
+  }
+};
+
+/**
+ * Adds or removes a bookmark entry for a post. Uses the
+ * `post_bookmarks` table. If the bookmark exists, it will be removed.
+ */
+export const toggleBookmark = async (
+  postId: string,
+  userId: string
+) => {
+  const { data, error } = await supabase
+    .from('post_bookmarks')
+    .select('post_id')
+    .eq('post_id', postId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) {
+    const { error: delErr } = await supabase
+      .from('post_bookmarks')
+      .delete()
+      .eq('post_id', postId)
+      .eq('user_id', userId);
+    if (delErr) throw delErr;
+    return { bookmarked: false };
+  } else {
+    const { error: insErr } = await supabase.from('post_bookmarks').insert({
+      post_id: postId,
+      user_id: userId,
+    });
+    if (insErr) throw insErr;
+    return { bookmarked: true };
+  }
+};
+
+/**
+ * Creates a collection for the given user.
+ */
+export const createCollection = async (userId: string, name: string) => {
+  const { error } = await supabase.from('collections').insert({
+    user_id: userId,
+    name,
+  });
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Renames a collection. Only the owner can rename.
+ */
+export const renameCollection = async (
+  collectionId: string,
+  name: string
+) => {
+  const { error } = await supabase
+    .from('collections')
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq('id', collectionId);
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Deletes a collection and its items.
+ */
+export const deleteCollection = async (collectionId: string) => {
+  const { error: itemsErr } = await supabase
+    .from('collection_items')
+    .delete()
+    .eq('collection_id', collectionId);
+  if (itemsErr) throw itemsErr;
+  const { error } = await supabase.from('collections').delete().eq('id', collectionId);
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Adds a post to a collection.
+ */
+export const addToCollection = async (
+  collectionId: string,
+  postId: string
+) => {
+  const { error } = await supabase.from('collection_items').insert({
+    collection_id: collectionId,
+    post_id: postId,
+  });
+  if (error) throw error;
+  return true;
+};
+
+/**
+ * Removes a post from a collection.
+ */
+export const removeFromCollection = async (
+  collectionId: string,
+  postId: string
+) => {
+  const { error } = await supabase
+    .from('collection_items')
+    .delete()
+    .eq('collection_id', collectionId)
+    .eq('post_id', postId);
+  if (error) throw error;
+  return true;
+};

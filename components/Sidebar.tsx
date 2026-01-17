@@ -87,39 +87,56 @@ export default function Sidebar({
 
         <nav className="flex-1 px-2 space-y-1">
           {/* Hub / Freunde */}
-          <button
-            onClick={() => go('/')}
-            className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
-          >
+          <button onClick={() => go('/')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
             Hub
           </button>
           {/* Feed */}
-          <button
-            onClick={() => go('/feed')}
-            className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
-          >
+          <button onClick={() => go('/feed')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
             Feed
           </button>
           {/* Explore / Search */}
-          <button
-            onClick={() => go('/search')}
-            className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
-          >
+          <button onClick={() => go('/search')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
             Explore
           </button>
+          {/* Stories */}
+          <button onClick={() => go('/stories')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+            Stories
+          </button>
           {/* Messages */}
-          <button
-            onClick={() => go('/messages')}
-            className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
-          >
+          <button onClick={() => go('/messages')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
             Nachrichten
           </button>
+          {/* Bookmarks */}
+          <button onClick={() => go('/bookmarks')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+            Bookmarks
+          </button>
+          {/* Collections */}
+          <button onClick={() => go('/collections')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+            Collections
+          </button>
+          {/* Trending */}
+          <button onClick={() => go('/trending')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+            Trending
+          </button>
           {/* Notifications */}
-          <button
-            onClick={() => go('/notifications')}
-            className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]"
-          >
+          <button onClick={() => go('/notifications')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
             Benachrichtigungen
+          </button>
+          {/* Aura */}
+          <button onClick={() => go('/aura')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+            Migo Aura
+          </button>
+          {/* Vault */}
+          <button onClick={() => go('/vault')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+            Vault
+          </button>
+          {/* Settings */}
+          <button onClick={() => go('/settings/notifications')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+            Einstellungen
+          </button>
+          {/* Report */}
+          <button onClick={() => go('/report')} className="w-full text-left px-3 py-2 rounded-md text-gray-300 hover:bg-[#2b2d31]">
+            Melden
           </button>
         </nav>
 
